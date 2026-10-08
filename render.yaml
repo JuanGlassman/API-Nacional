@@ -1,0 +1,44 @@
+# Despliegue de Facu. Ambos recursos usan explícitamente el plan gratuito.
+services:
+  - type: web
+    name: sistema-nacional-api
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    autoDeployTrigger: off
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: sistema-nacional-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: sistema-nacional-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: sistema-nacional-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: sistema-nacional-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: sistema-nacional-db
+          property: password
+      # Reservado para la implementación de Javi; aún no lo consume la API.
+      - key: JWT_SECRET
+        generateValue: true
+
+databases:
+  - name: sistema-nacional-db
+    plan: free
+    region: virginia
+    postgresMajorVersion: "15"
+    databaseName: sistema_nacional
+    user: nacional
+    ipAllowList: []
