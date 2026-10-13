@@ -20,4 +20,6 @@ API REST del Sistema Nacional de Gestión de Recursos y Riesgos.
 
 ### Configuración
 
-Crear un archivo `.env` en la raíz.
+Agregar el archivo `.env` en la raíz.
+
+URL API: https://sistema-nacional-api-wqib.onrender.com
