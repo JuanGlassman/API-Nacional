@@ -40,9 +40,16 @@ services:
         value: "60000"
       - key: SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME
         value: "0"
-      # Reservado para la implementación de Javi; aún no lo consume la API.
+      # Secreto para firmar los JWT (Render genera un valor aleatorio)
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_EXPIRATION_MINUTES
+        value: "60"
+      # Contraseñas de las cuentas iniciales; se cargan a mano en el panel de Render
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: BONITA_PASSWORD
+        sync: false
 
 databases:
   - name: sistema-nacional-db
