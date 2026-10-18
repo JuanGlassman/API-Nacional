@@ -1,5 +1,3 @@
-# API gratis en Render; PostgreSQL externo en Neon Free.
-# Ver docs/despliegue-facu.md para conectar un servicio ya desplegado.
 services:
   - type: web
     name: sistema-nacional-api
@@ -11,14 +9,27 @@ services:
     autoDeployTrigger: commit
     healthCheckPath: /actuator/health
     envVars:
-      # URL JDBC con SSL, sin usuario ni contraseña en la URL.
-      - key: SPRING_DATASOURCE_URL
-        sync: false
-      - key: SPRING_DATASOURCE_USERNAME
-        sync: false
-      - key: SPRING_DATASOURCE_PASSWORD
-        sync: false
-      # Liberar conexiones ociosas para permitir la suspensión de Neon.
+      - key: DB_HOST
+        fromDatabase:
+          name: sistema-nacional-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: sistema-nacional-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: sistema-nacional-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: sistema-nacional-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: sistema-nacional-db
+          property: password
+      # Pool pequeno para limitar las conexiones de la API.
       - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
         value: "5"
       - key: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
@@ -29,6 +40,22 @@ services:
         value: "60000"
       - key: SPRING_DATASOURCE_HIKARI_KEEPALIVE_TIME
         value: "0"
-      # Reservado para la implementación de Javi; aún no lo consume la API.
+      # Secreto para firmar los JWT (Render genera un valor aleatorio)
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_EXPIRATION_MINUTES
+        value: "60"
+      # Contraseñas de las cuentas iniciales; se cargan a mano en el panel de Render
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: BONITA_PASSWORD
+        sync: false
+
+databases:
+  - name: sistema-nacional-db
+    plan: free
+    region: virginia
+    postgresMajorVersion: "15"
+    databaseName: sistema_nacional
+    user: nacional
+    ipAllowList: []

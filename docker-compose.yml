@@ -25,6 +25,10 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-60}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      BONITA_PASSWORD: ${BONITA_PASSWORD}
     depends_on:
       - postgres
     networks:
