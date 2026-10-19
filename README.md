@@ -34,6 +34,7 @@ Agregar el archivo `.env` en la raíz con estas variables:
 | `BONITA_PASSWORD`        | Contraseña de la cuenta `bonita` (rol `SISTEMA_CLIENTE`), que se crea al arrancar |
 
 | `CUENTAS_ONG_PASSWORD`   | Opcional. Contraseña común de las cuentas de las ONGs del seed (`cruzroja`, `caritas`, `bomberos`, `bancoalimentos`, `techo`, rol `ONG`) |
+| `RESERVAS_BLOQUEO_HORAS` | Opcional. Horas que dura la reserva temporal (por defecto `24`) |
 
 Si falta `ADMIN_PASSWORD` o `BONITA_PASSWORD`, esa cuenta no se crea (queda un aviso en el log).
 
@@ -78,6 +79,19 @@ Al arrancar se cargan, si las tablas están vacías, los 10 recursos, las 5 ONGs
 | `DELETE /ongs/{id}/inventario/{recursoId}` | `ADMIN`, o `ONG` dueña | Baja de un ítem |
 
 La cuenta `ONG` queda ligada a su ONG por `cuenta.ong_id`. Bonita (`SISTEMA_CLIENTE`) solo consulta; bloqueará y liberará recursos con los endpoints de compromiso y liberación.
+
+### Reservas de recursos
+
+Bonita (`SISTEMA_CLIENTE`) o `ADMIN` reservan los recursos de las ONGs que ofrece una oferta ya guardada con `POST /ofertas`. El stock de cada ONG no se modifica: lo libre es el stock menos las reservas activas (comprometidas, o bloqueadas que no vencieron).
+
+| Método y ruta | Descripción |
+| --- | --- |
+| `POST /reservas/temporal` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Todo o nada: 409 si algún recurso no alcanza. Repetirla reemplaza los bloqueos anteriores |
+| `POST /reservas/definitiva` | Oferta adjudicada. Convierte los bloqueos en compromiso, que dura hasta la liberación. Si el bloqueo venció, vuelve a comprobar el stock (409 si ya no alcanza) |
+| `POST /reservas/liberacion` | Finalización. Libera los recursos de la oferta (o solo los de `ongId`). Repetirla no cambia nada |
+| `GET /reservas?emergenciaId&loteId&ofertaId` | Estado de las reservas. Un bloqueo vencido se informa como `EXPIRADA` |
+
+Los tres `POST` reciben `{emergenciaId, loteId, ofertaId}`. Cada operación toma con `SELECT ... FOR UPDATE` la oferta y las filas de inventario involucradas antes de calcular lo libre, así que dos reservas simultáneas sobre la misma ONG se serializan en PostgreSQL.
 
 ### API
 | Concepto                  | Función                                                                                                         |

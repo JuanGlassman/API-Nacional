@@ -41,6 +41,13 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.NOT_FOUND, ex.getMessage(), List.of());
     }
 
+    @ExceptionHandler(SolicitudInvalidaException.class)
+    public ResponseEntity<ErrorResponse> handleSolicitudInvalida(SolicitudInvalidaException ex,
+                                                                 HttpServletRequest request) {
+        log.warn("{} {} -> Solicitud inválida: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), List.of());
+    }
+
     @ExceptionHandler(ConflictoException.class)
     public ResponseEntity<ErrorResponse> handleConflicto(ConflictoException ex, HttpServletRequest request) {
         log.warn("{} {} -> Conflicto: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
