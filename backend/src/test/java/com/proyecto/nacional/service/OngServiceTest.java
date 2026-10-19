@@ -13,6 +13,7 @@ import com.proyecto.nacional.repository.CuentaRepository;
 import com.proyecto.nacional.repository.InventarioOngRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
+import com.proyecto.nacional.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,12 +26,16 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,6 +51,10 @@ class OngServiceTest {
     private InventarioOngRepository inventarioOngRepository;
     @Mock
     private CuentaRepository cuentaRepository;
+    @Mock
+    private ReservaRepository reservaRepository;
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-10-19T12:00:00Z"), ZoneOffset.UTC);
     @Spy
     private OngMapper ongMapper = new OngMapper();
     @InjectMocks
@@ -129,7 +138,7 @@ class OngServiceTest {
         existente.setOng(ong1);
         existente.setRecurso(frazadas);
         existente.setCantidadDisponible(200);
-        when(inventarioOngRepository.findByOngIdAndRecursoId(1L, 3L)).thenReturn(Optional.of(existente));
+        when(inventarioOngRepository.bloquearPorOngYRecurso(1L, 3L)).thenReturn(Optional.of(existente));
         when(inventarioOngRepository.findByOngId(1L)).thenReturn(List.of(existente));
 
         var respuesta = ongService.guardarInventario(1L,
@@ -177,6 +186,45 @@ class OngServiceTest {
 
         assertThatThrownBy(() -> ongService.eliminarItemInventario(1L, 3L, auth("admin", "ROLE_ADMIN")))
                 .isInstanceOf(RecursoNoEncontradoException.class);
+    }
+
+    @Test
+    void noSePuedeBajarElStockPorDebajoDeLoReservado() {
+        when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
+        when(recursoRepository.findById(3L)).thenReturn(Optional.of(frazadas));
+        InventarioOng existente = new InventarioOng();
+        existente.setOng(ong1);
+        existente.setRecurso(frazadas);
+        existente.setCantidadDisponible(200);
+        when(inventarioOngRepository.bloquearPorOngYRecurso(1L, 3L)).thenReturn(Optional.of(existente));
+        when(reservaRepository.sumarActivas(eq(1L), eq(3L), any())).thenReturn(120L);
+
+        assertThatThrownBy(() -> ongService.guardarInventario(1L,
+                new InventarioRequest(List.of(new InventarioItemRequest(3L, 100))), auth("admin", "ROLE_ADMIN")))
+                .isInstanceOf(ConflictoException.class);
+        assertThat(existente.getCantidadDisponible()).isEqualTo(200);
+    }
+
+    @Test
+    void noSeQuitaDelInventarioUnRecursoConCantidadesReservadas() {
+        when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
+        InventarioOng existente = new InventarioOng();
+        when(inventarioOngRepository.findByOngIdAndRecursoId(1L, 3L)).thenReturn(Optional.of(existente));
+        when(reservaRepository.sumarActivas(eq(1L), eq(3L), any())).thenReturn(10L);
+
+        assertThatThrownBy(() -> ongService.eliminarItemInventario(1L, 3L, auth("admin", "ROLE_ADMIN")))
+                .isInstanceOf(ConflictoException.class);
+        verify(inventarioOngRepository, never()).delete(any());
+    }
+
+    @Test
+    void noSeEliminaUnaOngConRecursosReservados() {
+        when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
+        when(cuentaRepository.existsByOngId(1L)).thenReturn(false);
+        when(reservaRepository.existenActivasDeOng(eq(1L), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> ongService.eliminar(1L)).isInstanceOf(ConflictoException.class);
+        verify(ongRepository, never()).delete(any());
     }
 
     private static Ong ong(Long id, String razonSocial, String path) {
