@@ -34,6 +34,19 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.FORBIDDEN, "No tiene permisos para acceder a este recurso", List.of());
     }
 
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ResponseEntity<ErrorResponse> handleNoEncontrado(RecursoNoEncontradoException ex,
+                                                            HttpServletRequest request) {
+        log.warn("{} {} -> No encontrado: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return construir(HttpStatus.NOT_FOUND, ex.getMessage(), List.of());
+    }
+
+    @ExceptionHandler(ConflictoException.class)
+    public ResponseEntity<ErrorResponse> handleConflicto(ConflictoException ex, HttpServletRequest request) {
+        log.warn("{} {} -> Conflicto: {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
+        return construir(HttpStatus.CONFLICT, ex.getMessage(), List.of());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidacion(MethodArgumentNotValidException ex,
                                                           HttpServletRequest request) {

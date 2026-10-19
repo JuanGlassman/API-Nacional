@@ -50,6 +50,8 @@ services:
         sync: false
       - key: BONITA_PASSWORD
         sync: false
+      - key: CUENTAS_ONG_PASSWORD
+        sync: false
 
 databases:
   - name: sistema-nacional-db
