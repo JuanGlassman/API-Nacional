@@ -16,6 +16,7 @@ import com.proyecto.nacional.repository.CuentaRepository;
 import com.proyecto.nacional.repository.InventarioOngRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
+import com.proyecto.nacional.repository.ReservaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,6 +24,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +44,8 @@ public class OngService {
     private final RecursoRepository recursoRepository;
     private final InventarioOngRepository inventarioOngRepository;
     private final CuentaRepository cuentaRepository;
+    private final ReservaRepository reservaRepository;
+    private final Clock clock;
     private final OngMapper ongMapper;
 
     // ---------- ONGs ----------
@@ -98,6 +103,11 @@ public class OngService {
         if (cuentaRepository.existsByOngId(id)) {
             throw new ConflictoException("La ONG tiene cuentas asociadas; deshabilítelas o desvincúlelas antes");
         }
+        if (reservaRepository.existenActivasDeOng(id, LocalDateTime.now(clock))) {
+            throw new ConflictoException("La ONG tiene recursos reservados; libérelos antes de darla de baja");
+        }
+        // Lo que queda son reservas liberadas o vencidas: solo historial
+        reservaRepository.deleteByOngId(id);
         inventarioOngRepository.deleteByOngId(id);
         ongRepository.delete(ong);
         log.info("ONG eliminada junto con su inventario. id={}", id);
@@ -143,18 +153,25 @@ public class OngService {
         verificarPermiso(ongId, auth);
         Ong ong = buscarOng(ongId);
 
+        LocalDateTime ahora = LocalDateTime.now(clock);
         for (InventarioItemRequest item : request.recursos()) {
             Recurso recurso = recursoRepository.findById(item.recursoId())
                     .orElseThrow(() -> new RecursoNoEncontradoException(
                             "No existe el recurso con id " + item.recursoId()));
+            // Con lock: una reserva en curso sobre esta fila espera a que termine este cambio (y al revés)
             InventarioOng inventario = inventarioOngRepository
-                    .findByOngIdAndRecursoId(ongId, recurso.getId())
+                    .bloquearPorOngYRecurso(ongId, recurso.getId())
                     .orElseGet(() -> {
                         InventarioOng nuevo = new InventarioOng();
                         nuevo.setOng(ong);
                         nuevo.setRecurso(recurso);
                         return nuevo;
                     });
+            long reservado = reservaRepository.sumarActivas(ongId, recurso.getId(), ahora);
+            if (item.cantidadDisponible() < reservado) {
+                throw new ConflictoException("No se puede dejar el recurso " + recurso.getNombre() + " en "
+                        + item.cantidadDisponible() + ": hay " + reservado + " reservados");
+            }
             inventario.setCantidadDisponible(item.cantidadDisponible());
             inventarioOngRepository.saveAndFlush(inventario);
         }
@@ -169,6 +186,10 @@ public class OngService {
         InventarioOng inventario = inventarioOngRepository.findByOngIdAndRecursoId(ongId, recursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "La ONG " + ongId + " no tiene el recurso " + recursoId + " en su inventario"));
+        if (reservaRepository.sumarActivas(ongId, recursoId, LocalDateTime.now(clock)) > 0) {
+            throw new ConflictoException("El recurso " + recursoId + " de la ONG " + ongId
+                    + " tiene cantidades reservadas; libérelas antes de quitarlo del inventario");
+        }
         inventarioOngRepository.delete(inventario);
         log.info("Ítem de inventario eliminado. ongId={} recursoId={}", ongId, recursoId);
     }
