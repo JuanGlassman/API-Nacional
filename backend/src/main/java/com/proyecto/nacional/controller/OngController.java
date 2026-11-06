@@ -89,7 +89,7 @@ public class OngController {
         return ongService.inventario(id);
     }
 
-    @PutMapping("/ongs/{id}/inventario")
+    @PatchMapping("/ongs/{id}/inventario")
     @PreAuthorize("hasAnyRole('ADMIN', 'ONG')")
     @Operation(summary = "Alta o modificación de ítems del inventario (administrador, o la propia ONG)")
     public InventarioOngResponse guardarInventario(@PathVariable Long id,
