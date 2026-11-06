@@ -26,7 +26,7 @@ public class ReservaController {
 
     private final ReservaService reservaService;
 
-    @PostMapping("/reservas/temporal")
+    @PostMapping("/reservas/temporales")
     @PreAuthorize("hasAnyRole('SISTEMA_CLIENTE', 'ADMIN')")
     @Operation(summary = "Reserva temporal (validación)",
             description = "Bloquea los recursos que ofrece una oferta ya guardada por un día. Todo o nada: si algún "
@@ -36,7 +36,7 @@ public class ReservaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(reservaService.reservarTemporal(request));
     }
 
-    @PostMapping("/reservas/definitiva")
+    @PostMapping("/reservas/definitivas")
     @PreAuthorize("hasAnyRole('SISTEMA_CLIENTE', 'ADMIN')")
     @Operation(summary = "Reserva definitiva (oferta adjudicada)",
             description = "Convierte los bloqueos de la oferta en compromiso, que dura hasta la liberación explícita. "
