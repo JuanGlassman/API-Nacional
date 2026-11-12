@@ -63,7 +63,7 @@ class ReservaControllerTest {
 
     @Test
     void sinTokenDevuelve401() throws Exception {
-        mockMvc.perform(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content(BODY))
+        mockMvc.perform(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -71,7 +71,7 @@ class ReservaControllerTest {
     void bonitaReservaTemporalYRecibe201() throws Exception {
         when(reservaService.reservarTemporal(any())).thenReturn(RESPUESTA);
 
-        conToken(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content(BODY),
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estado").value("BLOQUEADA"));
@@ -82,15 +82,15 @@ class ReservaControllerTest {
         when(reservaService.reservarDefinitiva(any())).thenReturn(RESPUESTA);
         when(reservaService.liberar(any())).thenReturn(RESPUESTA);
 
-        conToken(post("/reservas/definitiva").contentType(MediaType.APPLICATION_JSON).content(BODY),
+        conToken(post("/reservas/definitivas").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isOk());
-        conToken(post("/reservas/liberacion").contentType(MediaType.APPLICATION_JSON).content(BODY),
+        conToken(post("/reservas/liberaciones").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isOk());
     }
 
     @Test
     void unaOngNoPuedeReservarNiLiberar() throws Exception {
-        for (String ruta : List.of("/reservas/temporal", "/reservas/definitiva", "/reservas/liberacion")) {
+        for (String ruta : List.of("/reservas/temporales", "/reservas/definitivas", "/reservas/liberaciones")) {
             conToken(post(ruta).contentType(MediaType.APPLICATION_JSON).content(BODY), Rol.ONG)
                     .andExpect(status().isForbidden());
         }
@@ -99,7 +99,7 @@ class ReservaControllerTest {
 
     @Test
     void cuerpoSinCamposObligatoriosDevuelve400() throws Exception {
-        conToken(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content("{}"),
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content("{}"),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isBadRequest());
         verifyNoInteractions(reservaService);
     }
@@ -107,9 +107,9 @@ class ReservaControllerTest {
     @Test
     void itemConCantidadCeroDevuelve400() throws Exception {
         String body = "{\"emergenciaId\":1,\"loteId\":1,\"ofertaId\":1,"
-                + "\"items\":[{\"ongId\":1,\"recursoId\":1,\"cantidad\":0}]}";
+                + "\"items\":[{\"ongCodigo\":\"cod-1\",\"recursoId\":1,\"cantidad\":0}]}";
 
-        conToken(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content(body),
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(body),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isBadRequest());
     }
 
@@ -117,7 +117,7 @@ class ReservaControllerTest {
     void recursosInsuficientesDevuelve409() throws Exception {
         when(reservaService.reservarTemporal(any())).thenThrow(new ConflictoException("Recursos insuficientes"));
 
-        conToken(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content(BODY),
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje").value("Recursos insuficientes"));
@@ -127,7 +127,7 @@ class ReservaControllerTest {
     void solicitudInvalidaDelNegocioDevuelve400() throws Exception {
         when(reservaService.reservarTemporal(any())).thenThrow(new SolicitudInvalidaException("Excede lo ofrecido"));
 
-        conToken(post("/reservas/temporal").contentType(MediaType.APPLICATION_JSON).content(BODY),
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isBadRequest());
     }
 

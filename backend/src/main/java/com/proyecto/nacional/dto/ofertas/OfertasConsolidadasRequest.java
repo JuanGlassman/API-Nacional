@@ -22,7 +22,7 @@ public record OfertasConsolidadasRequest(
             @NotEmpty @Valid List<AporteRequest> aportes
     ) {}
 
-    public record OngRequest(Long id, String razonSocial) {}
+    public record OngRequest(@NotNull String codigo, String razonSocial) {}
 
     public record AporteRequest(
             @NotNull Long itemLoteId,
@@ -33,7 +33,7 @@ public record OfertasConsolidadasRequest(
     ) {}
 
     public record AporteOngRequest(
-            @NotNull Long ongId,
+            @NotNull String ongCodigo,
             @NotNull String razonSocial,
             @NotNull Integer cantidadOfrecida
     ) {}

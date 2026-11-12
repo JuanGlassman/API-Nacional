@@ -69,13 +69,14 @@ Al arrancar se cargan, si las tablas están vacías, los 10 recursos, las 5 ONGs
 
 | Método y ruta | Quién | Descripción |
 | --- | --- | --- |
-| `GET /ongs`, `GET /ongs/{id}` | cualquier cuenta | Consulta de ONGs (`id`, `razonSocial`, `bonitaGroupPath`) |
-| `POST /ongs` | `ADMIN` | Alta de ONG |
+| `GET /ongs`, `GET /ongs/{id}` | cualquier cuenta | Consulta de ONGs (`id`, `codigo`, `razonSocial`, `bonitaGroupPath`) |
+| `GET /ongs/codigo/{codigo}` | cualquier cuenta | Consulta por código común |
+| `POST /ongs` | `ADMIN` | Alta de ONG; `codigo` (UUID) es opcional y no se puede modificar después |
 | `PUT /ongs/{id}` | `ADMIN`, o `ONG` dueña (no puede cambiar `bonitaGroupPath`) | Modificación |
 | `DELETE /ongs/{id}` | `ADMIN` | Baja de la ONG y su inventario (409 si tiene cuentas asociadas) |
 | `GET /recursos` | cualquier cuenta | Catálogo de recursos |
 | `GET /ongs/{id}/inventario`, `GET /ongs/inventario?ongIds=1,2` | cualquier cuenta | Inventario por ONG |
-| `PUT /ongs/{id}/inventario` | `ADMIN`, o `ONG` dueña | Alta o modificación de ítems `{recursoId, cantidadDisponible}` |
+| `PATCH /ongs/{id}/inventario` | `ADMIN`, o `ONG` dueña | Alta o modificación de ítems `{recursoId, cantidadDisponible}` |
 | `DELETE /ongs/{id}/inventario/{recursoId}` | `ADMIN`, o `ONG` dueña | Baja de un ítem |
 
 La cuenta `ONG` queda ligada a su ONG por `cuenta.ong_id`. Bonita (`SISTEMA_CLIENTE`) solo consulta; bloqueará y liberará recursos con los endpoints de compromiso y liberación.
@@ -86,12 +87,12 @@ Bonita (`SISTEMA_CLIENTE`) o `ADMIN` reservan los recursos de las ONGs que ofrec
 
 | Método y ruta | Descripción |
 | --- | --- |
-| `POST /reservas/temporal` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Todo o nada: 409 si algún recurso no alcanza. Repetirla reemplaza los bloqueos anteriores |
-| `POST /reservas/definitiva` | Oferta adjudicada. Convierte los bloqueos en compromiso, que dura hasta la liberación. Si el bloqueo venció, vuelve a comprobar el stock (409 si ya no alcanza) |
-| `POST /reservas/liberacion` | Finalización. Libera los recursos de la oferta (o solo los de `ongId`). Repetirla no cambia nada |
+| `POST /reservas/temporales` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Todo o nada: 409 si algún recurso no alcanza. Repetirla reemplaza los bloqueos anteriores |
+| `POST /reservas/definitivas` | Oferta adjudicada. Convierte los bloqueos en compromiso, que dura hasta la liberación. Si el bloqueo venció, vuelve a comprobar el stock (409 si ya no alcanza) |
+| `POST /reservas/liberaciones` | Finalización. Libera los recursos de la oferta (o solo los de `ongCodigo`). Repetirla no cambia nada |
 | `GET /reservas?emergenciaId&loteId&ofertaId` | Estado de las reservas. Un bloqueo vencido se informa como `EXPIRADA` |
 
-Los tres `POST` reciben `{emergenciaId, loteId, ofertaId}`. Cada operación toma con `SELECT ... FOR UPDATE` la oferta y las filas de inventario involucradas antes de calcular lo libre, así que dos reservas simultáneas sobre la misma ONG se serializan en PostgreSQL.
+Las ONGs se identifican en estos contratos (ofertas, ítems de la reserva y liberación) por su `codigo` común (`ongCodigo`), el mismo en la aplicación local; el `id` numérico es propio de cada base. Los tres `POST` reciben `{emergenciaId, loteId, ofertaId}`. Cada operación toma con `SELECT ... FOR UPDATE` la oferta y las filas de inventario involucradas antes de calcular lo libre, así que dos reservas simultáneas sobre la misma ONG se serializan en PostgreSQL.
 
 ### API
 | Concepto                  | Función                                                                                                         |

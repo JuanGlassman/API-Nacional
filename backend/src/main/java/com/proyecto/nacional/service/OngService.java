@@ -60,8 +60,18 @@ public class OngService {
         return ongMapper.toResponse(buscarOng(id));
     }
 
+    public OngResponse obtenerPorCodigo(String codigo) {
+        return ongMapper.toResponse(ongRepository.findByCodigo(codigo.toLowerCase())
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe la ONG con código " + codigo)));
+    }
+
     @Transactional
     public OngResponse crear(OngRequest request) {
+        String codigo = request.codigo() == null || request.codigo().isBlank()
+                ? null : request.codigo().toLowerCase();
+        if (codigo != null && ongRepository.existsByCodigo(codigo)) {
+            throw new ConflictoException("Ya existe una ONG con el código " + codigo);
+        }
         if (ongRepository.existsByRazonSocial(request.razonSocial())) {
             throw new ConflictoException("Ya existe una ONG con la razón social " + request.razonSocial());
         }
@@ -69,6 +79,7 @@ public class OngService {
             throw new ConflictoException("Ya existe una ONG con el grupo de Bonita " + request.bonitaGroupPath());
         }
         Ong ong = new Ong();
+        ong.setCodigo(codigo);
         ong.setRazonSocial(request.razonSocial());
         ong.setBonitaGroupPath(request.bonitaGroupPath());
         Ong guardada = ongRepository.save(ong);
@@ -81,6 +92,11 @@ public class OngService {
         verificarPermiso(id, auth);
         Ong ong = buscarOng(id);
 
+        // El código identifica a la ONG en todos los sistemas: una vez asignado no cambia
+        if (request.codigo() != null && !request.codigo().isBlank()
+                && !request.codigo().equalsIgnoreCase(ong.getCodigo())) {
+            throw new ConflictoException("El código de la ONG no se puede modificar");
+        }
         // El grupo de Bonita vincula a la ONG con sus usuarios: solo lo cambia el administrador
         if (!esAdmin(auth) && !ong.getBonitaGroupPath().equals(request.bonitaGroupPath())) {
             throw new AccessDeniedException("Solo un administrador puede cambiar el grupo de Bonita");

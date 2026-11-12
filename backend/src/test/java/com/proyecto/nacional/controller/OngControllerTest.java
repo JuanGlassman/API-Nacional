@@ -31,6 +31,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -68,7 +69,7 @@ class OngControllerTest {
 
     @Test
     void cualquierCuentaAutenticadaListaLasOngs() throws Exception {
-        when(ongService.listar()).thenReturn(java.util.List.of(new OngResponse(1L, "Cruz Roja", "/ONG/CruzRoja")));
+        when(ongService.listar()).thenReturn(java.util.List.of(new OngResponse(1L, "57f6bace-9f0e-4c1b-9ac8-0e3b09069e29", "Cruz Roja", "/ONG/CruzRoja")));
 
         conToken(get("/ongs"), Rol.SISTEMA_CLIENTE)
                 .andExpect(status().isOk())
@@ -78,7 +79,7 @@ class OngControllerTest {
 
     @Test
     void adminDaDeAltaUnaOng() throws Exception {
-        when(ongService.crear(any())).thenReturn(new OngResponse(9L, "Nueva ONG", "/ONG/Nueva"));
+        when(ongService.crear(any())).thenReturn(new OngResponse(9L, "11111111-1111-1111-1111-111111111111", "Nueva ONG", "/ONG/Nueva"));
 
         conToken(post("/ongs").contentType(MediaType.APPLICATION_JSON).content(BODY_ONG), Rol.ADMIN)
                 .andExpect(status().isCreated())
@@ -106,7 +107,7 @@ class OngControllerTest {
                 .andExpect(status().isForbidden());
         conToken(put("/ongs/1").contentType(MediaType.APPLICATION_JSON).content(BODY_ONG), Rol.SISTEMA_CLIENTE)
                 .andExpect(status().isForbidden());
-        conToken(put("/ongs/1/inventario").contentType(MediaType.APPLICATION_JSON).content(BODY_INVENTARIO),
+        conToken(patch("/ongs/1/inventario").contentType(MediaType.APPLICATION_JSON).content(BODY_INVENTARIO),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isForbidden());
         conToken(delete("/ongs/1/inventario/1"), Rol.SISTEMA_CLIENTE).andExpect(status().isForbidden());
         verifyNoInteractions(ongService);
@@ -114,7 +115,7 @@ class OngControllerTest {
 
     @Test
     void ongEditaSuInventarioDelegandoElControlDePertenenciaAlService() throws Exception {
-        conToken(put("/ongs/1/inventario").contentType(MediaType.APPLICATION_JSON).content(BODY_INVENTARIO),
+        conToken(patch("/ongs/1/inventario").contentType(MediaType.APPLICATION_JSON).content(BODY_INVENTARIO),
                 Rol.ONG).andExpect(status().isOk());
         verify(ongService).guardarInventario(eq(1L), any(), any());
     }

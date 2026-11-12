@@ -45,10 +45,10 @@ public class ReservaController {
         return reservaService.reservarDefinitiva(request);
     }
 
-    @PostMapping("/reservas/liberacion")
+    @PostMapping("/reservas/liberaciones")
     @PreAuthorize("hasAnyRole('SISTEMA_CLIENTE', 'ADMIN')")
     @Operation(summary = "Liberación (finalización)",
-            description = "Libera los recursos reservados por la oferta, o solo los de una ONG si se indica ongId. "
+            description = "Libera los recursos reservados por la oferta, o solo los de una ONG si se indica ongCodigo. "
                     + "Se puede repetir sin efecto.")
     public ReservaResponse liberar(@Valid @RequestBody ReservaLiberacionRequest request) {
         return reservaService.liberar(request);

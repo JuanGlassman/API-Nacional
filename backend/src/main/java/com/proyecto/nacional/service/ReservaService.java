@@ -49,7 +49,8 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class ReservaService {
 
-    private record Par(Long ongId, Long recursoId) {
+    // La ONG se identifica por su código común, no por el id de esta base
+    private record Par(String ongCodigo, Long recursoId) {
     }
 
     private final OfertaRepository ofertaRepository;
@@ -98,7 +99,7 @@ public class ReservaService {
         cargarOfrecido(oferta, ofrecido, recursos);
         Map<Par, Integer> pedido = elegirPedido(request, ofrecido);
 
-        Map<Long, Ong> ongs = buscarOngs(pedido.keySet());
+        Map<String, Ong> ongs = buscarOngs(pedido.keySet());
         Map<Par, InventarioOng> inventario = bloquearInventario(pedido.keySet());
 
         // Revalidar reemplaza los bloqueos anteriores de la oferta; si esto falla, la transacción los restituye
@@ -111,7 +112,7 @@ public class ReservaService {
         List<Reserva> nuevas = new ArrayList<>();
         pedido.forEach((par, cantidad) -> {
             Reserva reserva = new Reserva();
-            reserva.setOng(ongs.get(par.ongId()));
+            reserva.setOng(ongs.get(par.ongCodigo()));
             reserva.setRecurso(recursos.get(par.recursoId()));
             reserva.setCantidad(cantidad);
             reserva.setEstado(EstadoReserva.BLOQUEADA);
@@ -152,15 +153,15 @@ public class ReservaService {
                 .toList();
         if (!bloqueadas.isEmpty()) {
             Set<Par> pares = new HashSet<>();
-            bloqueadas.forEach(r -> pares.add(new Par(r.getOng().getId(), r.getRecurso().getId())));
+            bloqueadas.forEach(r -> pares.add(new Par(r.getOng().getCodigo(), r.getRecurso().getId())));
             Map<Par, InventarioOng> inventario = bloquearInventario(pares);
 
             for (Reserva reserva : bloqueadas) {
                 // Un bloqueo vencido ya no tenía tomado el stock: hay que comprobar que siga habiendo
                 if (vencida(reserva, ahora)) {
-                    Par par = new Par(reserva.getOng().getId(), reserva.getRecurso().getId());
+                    Par par = new Par(reserva.getOng().getCodigo(), reserva.getRecurso().getId());
                     verificarDisponibilidad(Map.of(par, reserva.getCantidad()), inventario,
-                            Map.of(par.ongId(), reserva.getOng()), Map.of(par.recursoId(), reserva.getRecurso()),
+                            Map.of(par.ongCodigo(), reserva.getOng()), Map.of(par.recursoId(), reserva.getRecurso()),
                             ahora);
                 }
                 reserva.setEstado(EstadoReserva.COMPROMETIDA);
@@ -183,18 +184,18 @@ public class ReservaService {
 
         List<Reserva> reservas = reservasDeLaOferta(request.emergenciaId(), request.loteId(), request.ofertaId())
                 .stream()
-                .filter(r -> request.ongId() == null || r.getOng().getId().equals(request.ongId()))
+                .filter(r -> request.ongCodigo() == null || r.getOng().getCodigo().equals(request.ongCodigo()))
                 .toList();
         if (reservas.isEmpty()) {
             throw new RecursoNoEncontradoException("No hay reservas de la oferta " + request.ofertaId()
-                    + (request.ongId() == null ? "" : " para la ONG " + request.ongId()));
+                    + (request.ongCodigo() == null ? "" : " para la ONG " + request.ongCodigo()));
         }
 
         // Las ya liberadas y los bloqueos vencidos se dejan como están, así repetir la liberación no cambia nada
         reservas.stream()
                 .filter(r -> activa(r, ahora))
                 .forEach(r -> liberar(r, ahora));
-        log.info("Liberación. oferta={} ong={} items={}", request.ofertaId(), request.ongId(), reservas.size());
+        log.info("Liberación. oferta={} ong={} items={}", request.ofertaId(), request.ongCodigo(), reservas.size());
         return armarRespuesta(request.emergenciaId(), request.loteId(), request.ofertaId(), reservas, ahora);
     }
 
@@ -229,7 +230,7 @@ public class ReservaService {
             recursos.put(recurso.getId(), recurso);
             aporte.getPorOng().stream()
                     .filter(porOng -> porOng.getCantidadOfrecida() != null && porOng.getCantidadOfrecida() > 0)
-                    .forEach(porOng -> ofrecido.merge(new Par(porOng.getOngId(), recurso.getId()),
+                    .forEach(porOng -> ofrecido.merge(new Par(porOng.getOngCodigo(), recurso.getId()),
                             porOng.getCantidadOfrecida(), Integer::sum));
         });
         if (ofrecido.isEmpty()) {
@@ -244,60 +245,61 @@ public class ReservaService {
         }
         Map<Par, Integer> pedido = new LinkedHashMap<>();
         for (ReservaTemporalRequest.ItemReserva item : request.items()) {
-            Par par = new Par(item.ongId(), item.recursoId());
+            Par par = new Par(item.ongCodigo(), item.recursoId());
             Integer maximo = ofrecido.get(par);
             if (maximo == null) {
                 throw new SolicitudInvalidaException("La oferta no incluye el recurso " + item.recursoId()
-                        + " de la ONG " + item.ongId());
+                        + " de la ONG " + item.ongCodigo());
             }
             if (item.cantidad() > maximo) {
-                throw new SolicitudInvalidaException("La ONG " + item.ongId() + " ofrece " + maximo
+                throw new SolicitudInvalidaException("La ONG " + item.ongCodigo() + " ofrece " + maximo
                         + " del recurso " + item.recursoId() + " y se pidieron " + item.cantidad());
             }
             if (pedido.put(par, item.cantidad()) != null) {
                 throw new SolicitudInvalidaException("El recurso " + item.recursoId() + " de la ONG "
-                        + item.ongId() + " está repetido en los ítems");
+                        + item.ongCodigo() + " está repetido en los ítems");
             }
         }
         return pedido;
     }
 
-    private Map<Long, Ong> buscarOngs(Set<Par> pares) {
-        Set<Long> ids = new HashSet<>();
-        pares.forEach(par -> ids.add(par.ongId()));
-        Map<Long, Ong> ongs = new HashMap<>();
-        ongRepository.findAllById(ids).forEach(ong -> ongs.put(ong.getId(), ong));
-        ids.stream().filter(id -> !ongs.containsKey(id)).findFirst().ifPresent(id -> {
-            throw new ConflictoException("La ONG " + id + " de la oferta no está registrada en el Sistema Nacional");
+    private Map<String, Ong> buscarOngs(Set<Par> pares) {
+        Set<String> codigos = new HashSet<>();
+        pares.forEach(par -> codigos.add(par.ongCodigo()));
+        Map<String, Ong> ongs = new HashMap<>();
+        ongRepository.findAllByCodigoIn(codigos).forEach(ong -> ongs.put(ong.getCodigo(), ong));
+        codigos.stream().filter(codigo -> !ongs.containsKey(codigo)).findFirst().ifPresent(codigo -> {
+            throw new ConflictoException("La ONG con código " + codigo
+                    + " de la oferta no está registrada en el Sistema Nacional");
         });
         return ongs;
     }
 
     // SELECT ... FOR UPDATE de las filas de stock de estos pares; un par sin fila queda fuera (stock 0)
     private Map<Par, InventarioOng> bloquearInventario(Set<Par> pares) {
-        Set<Long> ongIds = new HashSet<>();
+        Set<String> ongCodigos = new HashSet<>();
         Set<Long> recursoIds = new HashSet<>();
         pares.forEach(par -> {
-            ongIds.add(par.ongId());
+            ongCodigos.add(par.ongCodigo());
             recursoIds.add(par.recursoId());
         });
         Map<Par, InventarioOng> inventario = new HashMap<>();
-        for (InventarioOng fila : inventarioOngRepository.bloquearPorOngYRecurso(ongIds, recursoIds)) {
-            inventario.put(new Par(fila.getOng().getId(), fila.getRecurso().getId()), fila);
+        for (InventarioOng fila : inventarioOngRepository.bloquearPorOngCodigoYRecurso(ongCodigos, recursoIds)) {
+            inventario.put(new Par(fila.getOng().getCodigo(), fila.getRecurso().getId()), fila);
         }
         return inventario;
     }
 
     // Todo o nada: si algún recurso no alcanza se informan todos los faltantes y no se reserva nada
     private void verificarDisponibilidad(Map<Par, Integer> pedido, Map<Par, InventarioOng> inventario,
-                                         Map<Long, Ong> ongs, Map<Long, Recurso> recursos, LocalDateTime ahora) {
+                                         Map<String, Ong> ongs, Map<Long, Recurso> recursos, LocalDateTime ahora) {
         List<String> faltantes = new ArrayList<>();
         pedido.forEach((par, cantidad) -> {
             InventarioOng fila = inventario.get(par);
             long stock = fila == null ? 0 : fila.getCantidadDisponible();
-            long libre = stock - reservaRepository.sumarActivas(par.ongId(), par.recursoId(), ahora);
+            long libre = stock - reservaRepository.sumarActivas(ongs.get(par.ongCodigo()).getId(), par.recursoId(), ahora);
             if (cantidad > libre) {
-                faltantes.add(ongs.get(par.ongId()).getRazonSocial() + " - "
+                faltantes.add(ongs.get(par.ongCodigo()).getRazonSocial() + " - "
                         + recursos.get(par.recursoId()).getNombre() + ": se piden " + cantidad
                         + " y hay " + Math.max(libre, 0) + " libres");
             }
@@ -332,7 +334,7 @@ public class ReservaService {
         List<ItemReservaResponse> items = reservas.stream()
                 .sorted(Comparator.comparing(Reserva::getId))
                 .map(r -> new ItemReservaResponse(
-                        r.getOng().getId(), r.getOng().getRazonSocial(),
+                        r.getOng().getCodigo(), r.getOng().getRazonSocial(),
                         r.getRecurso().getId(), r.getRecurso().getNombre(), r.getRecurso().getUnidadMedida(),
                         r.getCantidad(), estadoVisible(r, ahora), r.getExpiraEn()))
                 .toList();
