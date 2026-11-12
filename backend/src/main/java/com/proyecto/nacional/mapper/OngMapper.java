@@ -15,7 +15,7 @@ import java.util.List;
 public class OngMapper {
 
     public OngResponse toResponse(Ong ong) {
-        return new OngResponse(ong.getId(), ong.getRazonSocial(), ong.getBonitaGroupPath());
+        return new OngResponse(ong.getId(), ong.getCodigo(), ong.getRazonSocial(), ong.getBonitaGroupPath());
     }
 
     public RecursoResponse toResponse(Recurso recurso) {

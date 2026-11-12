@@ -35,7 +35,7 @@ public class DatosIniciales implements CommandLineRunner {
     private record RecursoSeed(String nombre, String unidadMedida) {
     }
 
-    private record OngSeed(String razonSocial, String bonitaGroupPath, String username) {
+    private record OngSeed(String razonSocial, String bonitaGroupPath, String username, String codigo) {
     }
 
     // (ong, recurso, cantidad); ong y recurso son el número de orden del seed local (1 a N)
@@ -55,11 +55,16 @@ public class DatosIniciales implements CommandLineRunner {
             new RecursoSeed("Médicos", "personas"));               // 10
 
     private static final List<OngSeed> ONGS = List.of(
-            new OngSeed("Cruz Roja Argentina – Filial La Plata", "/ONG/CruzRojaLaPlata", "cruzroja"),            // 1
-            new OngSeed("Cáritas Arquidiócesis de Buenos Aires", "/ONG/CaritasBuenosAires", "caritas"),          // 2
-            new OngSeed("Bomberos Voluntarios de La Plata", "/ONG/BomberosLaPlata", "bomberos"),                 // 3
-            new OngSeed("Fundación Banco de Alimentos Buenos Aires", "/ONG/BancoAlimentosBA", "bancoalimentos"), // 4
-            new OngSeed("Techo Argentina – Regional Buenos Aires", "/ONG/TechoBuenosAires", "techo"));           // 5
+            new OngSeed("Cruz Roja Argentina – Filial La Plata", "/ONG/CruzRojaLaPlata", "cruzroja",
+                    "57f6bace-9f0e-4c1b-9ac8-0e3b09069e29"),            // 1
+            new OngSeed("Cáritas Arquidiócesis de Buenos Aires", "/ONG/CaritasBuenosAires", "caritas",
+                    "6a85312b-c5b0-415b-be1a-2244b612c77b"),          // 2
+            new OngSeed("Bomberos Voluntarios de La Plata", "/ONG/BomberosLaPlata", "bomberos",
+                    "cd35316c-5093-4826-89dd-4a525bb2c127"),                 // 3
+            new OngSeed("Fundación Banco de Alimentos Buenos Aires", "/ONG/BancoAlimentosBA", "bancoalimentos",
+                    "6017970a-9d32-4129-8a99-644127a74868"), // 4
+            new OngSeed("Techo Argentina – Regional Buenos Aires", "/ONG/TechoBuenosAires", "techo",
+                    "16c85edc-ccb4-40f1-b648-bb28a9111fdc"));           // 5
 
     private static final List<InventarioSeed> INVENTARIO = List.of(
             new InventarioSeed(1, 2, 10), new InventarioSeed(1, 3, 200),       // Cruz Roja: paramédicos, frazadas
@@ -129,6 +134,7 @@ public class DatosIniciales implements CommandLineRunner {
         boolean vacia = ongRepository.count() == 0;
         Map<Integer, Ong> porOrden = new HashMap<>();
         if (!vacia) {
+            asignarCodigosFaltantes();
             return porOrden;
         }
         for (int i = 0; i < ONGS.size(); i++) {
@@ -136,10 +142,28 @@ public class DatosIniciales implements CommandLineRunner {
             Ong ong = new Ong();
             ong.setRazonSocial(seed.razonSocial());
             ong.setBonitaGroupPath(seed.bonitaGroupPath());
+            ong.setCodigo(seed.codigo());
             porOrden.put(i + 1, ongRepository.save(ong));
         }
         log.info("Seed: {} ONGs creadas", ONGS.size());
         return porOrden;
+    }
+
+    // Bases creadas antes de que existiera el código común: las ONGs del seed reciben su código fijo
+    // (el mismo que en la app local) y cualquier otra uno nuevo
+    private void asignarCodigosFaltantes() {
+        for (Ong ong : ongRepository.findAll()) {
+            if (ong.getCodigo() != null) {
+                continue;
+            }
+            ong.setCodigo(ONGS.stream()
+                    .filter(seed -> seed.bonitaGroupPath().equals(ong.getBonitaGroupPath()))
+                    .map(OngSeed::codigo)
+                    .findFirst()
+                    .orElseGet(() -> java.util.UUID.randomUUID().toString()));
+            ongRepository.save(ong);
+            log.info("Seed: código común asignado a la ONG {}", ong.getId());
+        }
     }
 
     // Solo se carga junto con las ONGs: si ya existían, su inventario ya fue editado

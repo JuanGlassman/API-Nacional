@@ -16,7 +16,7 @@ public record ReservaTemporalRequest(
         @Valid List<ItemReserva> items
 ) {
     public record ItemReserva(
-            @NotNull @Schema(example = "1") Long ongId,
+            @NotNull @Schema(example = "57f6bace-9f0e-4c1b-9ac8-0e3b09069e29") String ongCodigo,
             @NotNull @Schema(example = "1") Long recursoId,
             @NotNull @Min(1) @Schema(example = "1") Integer cantidad
     ) {

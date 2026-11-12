@@ -76,9 +76,30 @@ class OngServiceTest {
     void crearConRazonSocialRepetidaDevuelveConflicto() {
         when(ongRepository.existsByRazonSocial("Cruz Roja")).thenReturn(true);
 
-        assertThatThrownBy(() -> ongService.crear(new OngRequest("Cruz Roja", "/ONG/Otra")))
+        assertThatThrownBy(() -> ongService.crear(new OngRequest(null, "Cruz Roja", "/ONG/Otra")))
                 .isInstanceOf(ConflictoException.class);
         verify(ongRepository, never()).save(any());
+    }
+
+    @Test
+    void crearConCodigoRepetidoDevuelveConflicto() {
+        String codigo = "57f6bace-9f0e-4c1b-9ac8-0e3b09069e29";
+        when(ongRepository.existsByCodigo(codigo)).thenReturn(true);
+
+        assertThatThrownBy(() -> ongService.crear(new OngRequest(codigo, "Otra", "/ONG/Otra")))
+                .isInstanceOf(ConflictoException.class);
+        verify(ongRepository, never()).save(any());
+    }
+
+    @Test
+    void elCodigoDeUnaOngNoSePuedeModificar() {
+        ong1.setCodigo("57f6bace-9f0e-4c1b-9ac8-0e3b09069e29");
+        when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
+
+        assertThatThrownBy(() -> ongService.actualizar(1L,
+                new OngRequest("6a85312b-c5b0-415b-be1a-2244b612c77b", "Cruz Roja", "/ONG/CruzRoja"),
+                auth("admin", "ROLE_ADMIN")))
+                .isInstanceOf(ConflictoException.class);
     }
 
     @Test
@@ -86,7 +107,7 @@ class OngServiceTest {
         when(cuentaRepository.findOngIdByUsername("cruzroja")).thenReturn(Optional.of(1L));
         when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
 
-        var respuesta = ongService.actualizar(1L, new OngRequest("Cruz Roja Nueva", "/ONG/CruzRoja"),
+        var respuesta = ongService.actualizar(1L, new OngRequest(null, "Cruz Roja Nueva", "/ONG/CruzRoja"),
                 auth("cruzroja", "ROLE_ONG"));
 
         assertThat(respuesta.razonSocial()).isEqualTo("Cruz Roja Nueva");
@@ -96,7 +117,7 @@ class OngServiceTest {
     void ongNoPuedeEditarOtraOng() {
         when(cuentaRepository.findOngIdByUsername("caritas")).thenReturn(Optional.of(2L));
 
-        assertThatThrownBy(() -> ongService.actualizar(1L, new OngRequest("X", "/ONG/CruzRoja"),
+        assertThatThrownBy(() -> ongService.actualizar(1L, new OngRequest(null, "X", "/ONG/CruzRoja"),
                 auth("caritas", "ROLE_ONG")))
                 .isInstanceOf(AccessDeniedException.class);
     }
@@ -115,7 +136,7 @@ class OngServiceTest {
         when(cuentaRepository.findOngIdByUsername("cruzroja")).thenReturn(Optional.of(1L));
         when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
 
-        assertThatThrownBy(() -> ongService.actualizar(1L, new OngRequest("Cruz Roja", "/ONG/Otro"),
+        assertThatThrownBy(() -> ongService.actualizar(1L, new OngRequest(null, "Cruz Roja", "/ONG/Otro"),
                 auth("cruzroja", "ROLE_ONG")))
                 .isInstanceOf(AccessDeniedException.class);
     }
@@ -124,7 +145,7 @@ class OngServiceTest {
     void adminEditaCualquierOngIncluidoElGrupoDeBonita() {
         when(ongRepository.findById(1L)).thenReturn(Optional.of(ong1));
 
-        var respuesta = ongService.actualizar(1L, new OngRequest("Cruz Roja", "/ONG/Otro"),
+        var respuesta = ongService.actualizar(1L, new OngRequest(null, "Cruz Roja", "/ONG/Otro"),
                 auth("admin", "ROLE_ADMIN"));
 
         assertThat(respuesta.bonitaGroupPath()).isEqualTo("/ONG/Otro");

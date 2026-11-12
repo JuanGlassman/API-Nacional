@@ -78,6 +78,7 @@ class ReservaServiceTest {
 
         bomberos = new Ong();
         bomberos.setId(3L);
+        bomberos.setCodigo("cod-bomberos");
         bomberos.setRazonSocial("Bomberos Voluntarios de La Plata");
         paramedicos = new Recurso();
         paramedicos.setId(2L);
@@ -92,8 +93,8 @@ class ReservaServiceTest {
         when(ofertaRepository.findByEmergenciaIdAndLoteIdAndOfertaId(1L, 1L, 1L))
                 .thenReturn(Optional.of(oferta(4)));
         when(recursoRepository.findByNombre("Paramédicos")).thenReturn(Optional.of(paramedicos));
-        when(ongRepository.findAllById(anyCollection())).thenReturn(List.of(bomberos));
-        when(inventarioOngRepository.bloquearPorOngYRecurso(anyCollection(), anyCollection()))
+        when(ongRepository.findAllByCodigoIn(anyCollection())).thenReturn(List.of(bomberos));
+        when(inventarioOngRepository.bloquearPorOngCodigoYRecurso(anyCollection(), anyCollection()))
                 .thenReturn(List.of(stockBomberos));
         when(reservaRepository.sumarActivas(anyLong(), anyLong(), any())).thenReturn(0L);
         when(reservaRepository.save(any(Reserva.class))).thenAnswer(i -> i.getArgument(0));
@@ -119,7 +120,7 @@ class ReservaServiceTest {
 
     @Test
     void reservaTemporalConItemsReservaSoloEsaCantidad() {
-        service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva(3L, 2L, 2))));
+        service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva("cod-bomberos", 2L, 2))));
 
         ArgumentCaptor<Reserva> guardada = ArgumentCaptor.forClass(Reserva.class);
         verify(reservaRepository).save(guardada.capture());
@@ -129,7 +130,7 @@ class ReservaServiceTest {
     @Test
     void reservaTemporalRechazaItemsQueSuperanLoOfrecido() {
         assertThatThrownBy(() -> service.reservarTemporal(
-                new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva(3L, 2L, 5)))))
+                new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva("cod-bomberos", 2L, 5)))))
                 .isInstanceOf(SolicitudInvalidaException.class);
         verify(reservaRepository, never()).save(any());
     }
@@ -137,7 +138,7 @@ class ReservaServiceTest {
     @Test
     void reservaTemporalRechazaItemsQueLaOfertaNoIncluye() {
         assertThatThrownBy(() -> service.reservarTemporal(
-                new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva(3L, 4L, 1)))))
+                new ReservaTemporalRequest(1L, 1L, 1L, List.of(new ItemReserva("cod-bomberos", 4L, 1)))))
                 .isInstanceOf(SolicitudInvalidaException.class);
     }
 
@@ -155,7 +156,7 @@ class ReservaServiceTest {
 
     @Test
     void reservaTemporalSinFilaDeInventarioCuentaComoStockCero() {
-        when(inventarioOngRepository.bloquearPorOngYRecurso(anyCollection(), anyCollection()))
+        when(inventarioOngRepository.bloquearPorOngCodigoYRecurso(anyCollection(), anyCollection()))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.reservarTemporal(temporal())).isInstanceOf(ConflictoException.class);
@@ -244,7 +245,7 @@ class ReservaServiceTest {
         ReservaResponse respuesta = service.reservarDefinitiva(new ReservaRequest(1L, 1L, 1L));
 
         assertThat(respuesta.estado()).isEqualTo("COMPROMETIDA");
-        verify(inventarioOngRepository, never()).bloquearPorOngYRecurso(anyCollection(), anyCollection());
+        verify(inventarioOngRepository, never()).bloquearPorOngCodigoYRecurso(anyCollection(), anyCollection());
     }
 
     @Test
@@ -312,13 +313,14 @@ class ReservaServiceTest {
     void liberacionPorOngSoloLiberaLasDeEsaOng() {
         Ong otra = new Ong();
         otra.setId(5L);
+        otra.setCodigo("cod-techo");
         otra.setRazonSocial("Techo");
         Reserva deBomberos = reserva(10L, 4, EstadoReserva.COMPROMETIDA, null);
         Reserva deTecho = reserva(11L, 2, EstadoReserva.COMPROMETIDA, null);
         deTecho.setOng(otra);
         reservasDeLaOferta(deBomberos, deTecho);
 
-        service.liberar(new ReservaLiberacionRequest(1L, 1L, 1L, 3L));
+        service.liberar(new ReservaLiberacionRequest(1L, 1L, 1L, "cod-bomberos"));
 
         assertThat(deBomberos.getEstado()).isEqualTo(EstadoReserva.LIBERADA);
         assertThat(deTecho.getEstado()).isEqualTo(EstadoReserva.COMPROMETIDA);
@@ -386,7 +388,7 @@ class ReservaServiceTest {
     // Oferta con un aporte de paramédicos en el que Bomberos (ONG 3) ofrece la cantidad indicada
     private Oferta oferta(int cantidadOfrecida) {
         OfertaAporteOng porOng = new OfertaAporteOng();
-        porOng.setOngId(3L);
+        porOng.setOngCodigo("cod-bomberos");
         porOng.setRazonSocial("Bomberos Voluntarios de La Plata");
         porOng.setCantidadOfrecida(cantidadOfrecida);
 

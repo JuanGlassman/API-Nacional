@@ -39,6 +39,12 @@ public class OngController {
         return ongService.obtener(id);
     }
 
+    @GetMapping("/ongs/codigo/{codigo}")
+    @Operation(summary = "Obtener una ONG por su código común")
+    public OngResponse obtenerPorCodigo(@PathVariable String codigo) {
+        return ongService.obtenerPorCodigo(codigo);
+    }
+
     @PostMapping("/ongs")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Dar de alta una ONG (solo administrador)")
