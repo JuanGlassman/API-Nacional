@@ -163,6 +163,72 @@ class ReservaServiceTest {
     }
 
     @Test
+    void reservaTemporalParcialReservaLoQueHayLibre() {
+        // Stock 6, 3 tomados por otras ofertas: quedan 3 libres y se ofrecen 4
+        when(reservaRepository.sumarActivas(3L, 2L, AHORA)).thenReturn(3L);
+
+        ReservaResponse respuesta = service.reservarTemporal(
+                new ReservaTemporalRequest(1L, 1L, 1L, null, true));
+
+        ArgumentCaptor<Reserva> guardada = ArgumentCaptor.forClass(Reserva.class);
+        verify(reservaRepository).save(guardada.capture());
+        assertThat(guardada.getValue().getCantidad()).isEqualTo(3);
+        assertThat(guardada.getValue().getEstado()).isEqualTo(EstadoReserva.BLOQUEADA);
+        assertThat(respuesta.items()).hasSize(1);
+        assertThat(respuesta.items().get(0).cantidad()).isEqualTo(3);
+    }
+
+    @Test
+    void reservaTemporalParcialReservaTodoSiHayStockSuficiente() {
+        service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, null, true));
+
+        ArgumentCaptor<Reserva> guardada = ArgumentCaptor.forClass(Reserva.class);
+        verify(reservaRepository).save(guardada.capture());
+        assertThat(guardada.getValue().getCantidad()).isEqualTo(4);
+    }
+
+    @Test
+    void reservaTemporalParcialSinNadaLibreDevuelveConflictoYNoReservaNada() {
+        when(reservaRepository.sumarActivas(3L, 2L, AHORA)).thenReturn(6L);
+
+        assertThatThrownBy(() -> service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, null, true)))
+                .isInstanceOf(ConflictoException.class)
+                .hasMessageContaining("0 libres");
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    void reservaTemporalParcialSinFilaDeInventarioDevuelveConflicto() {
+        when(inventarioOngRepository.bloquearPorOngCodigoYRecurso(anyCollection(), anyCollection()))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, null, true)))
+                .isInstanceOf(ConflictoException.class);
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    void reservaTemporalParcialConParcialFalseSigueSiendoTodoONada() {
+        when(reservaRepository.sumarActivas(3L, 2L, AHORA)).thenReturn(3L);
+
+        assertThatThrownBy(() -> service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L, null, false)))
+                .isInstanceOf(ConflictoException.class);
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    void reservaTemporalParcialConItemsTopeaCadaItemAlLibre() {
+        when(reservaRepository.sumarActivas(3L, 2L, AHORA)).thenReturn(5L);
+
+        service.reservarTemporal(new ReservaTemporalRequest(1L, 1L, 1L,
+                List.of(new ItemReserva("cod-bomberos", 2L, 3)), true));
+
+        ArgumentCaptor<Reserva> guardada = ArgumentCaptor.forClass(Reserva.class);
+        verify(reservaRepository).save(guardada.capture());
+        assertThat(guardada.getValue().getCantidad()).isEqualTo(1);
+    }
+
+    @Test
     void reservaTemporalDeOfertaInexistenteDevuelve404() {
         when(ofertaRepository.findByEmergenciaIdAndLoteIdAndOfertaId(1L, 1L, 9L)).thenReturn(Optional.empty());
 

@@ -87,7 +87,7 @@ Bonita (`SISTEMA_CLIENTE`) o `ADMIN` reservan los recursos de las ONGs que ofrec
 
 | Método y ruta | Descripción |
 | --- | --- |
-| `POST /reservas/temporales` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Todo o nada: 409 si algún recurso no alcanza. Repetirla reemplaza los bloqueos anteriores |
+| `POST /reservas/temporales` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Por defecto es todo o nada: 409 si algún recurso no alcanza. Con `"parcial": true` bloquea lo que haya libre de cada recurso (hasta lo pedido, omitiendo los que no tienen nada) y solo responde 409 si no puede bloquear nada; la respuesta trae las cantidades realmente bloqueadas. Repetirla reemplaza los bloqueos anteriores |
 | `POST /reservas/definitivas` | Oferta adjudicada. Convierte los bloqueos en compromiso, que dura hasta la liberación. Si el bloqueo venció, vuelve a comprobar el stock (409 si ya no alcanza) |
 | `POST /reservas/liberaciones` | Finalización. Libera los recursos de la oferta (o solo los de `ongCodigo`). Repetirla no cambia nada |
 | `GET /reservas?emergenciaId&loteId&ofertaId` | Estado de las reservas. Un bloqueo vencido se informa como `EXPIRADA` |

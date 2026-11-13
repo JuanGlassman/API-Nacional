@@ -2,6 +2,7 @@ package com.proyecto.nacional.controller;
 
 import com.proyecto.nacional.config.SecurityConfig;
 import com.proyecto.nacional.dto.reservas.ReservaResponse;
+import com.proyecto.nacional.dto.reservas.ReservaTemporalRequest;
 import com.proyecto.nacional.exception.ConflictoException;
 import com.proyecto.nacional.exception.GlobalExceptionHandler;
 import com.proyecto.nacional.exception.SolicitudInvalidaException;
@@ -13,6 +14,7 @@ import com.proyecto.nacional.security.JwtService;
 import com.proyecto.nacional.security.ManejadorErroresSeguridad;
 import com.proyecto.nacional.service.ReservaService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -27,7 +29,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -75,6 +79,31 @@ class ReservaControllerTest {
                 Rol.SISTEMA_CLIENTE)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estado").value("BLOQUEADA"));
+    }
+
+    @Test
+    void bonitaPideLaReservaTemporalParcial() throws Exception {
+        when(reservaService.reservarTemporal(any())).thenReturn(RESPUESTA);
+        String body = "{\"emergenciaId\":1,\"loteId\":1,\"ofertaId\":1,\"parcial\":true}";
+
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(body),
+                Rol.SISTEMA_CLIENTE).andExpect(status().isCreated());
+
+        ArgumentCaptor<ReservaTemporalRequest> pedido = ArgumentCaptor.forClass(ReservaTemporalRequest.class);
+        verify(reservaService).reservarTemporal(pedido.capture());
+        assertThat(pedido.getValue().esParcial()).isTrue();
+    }
+
+    @Test
+    void sinParcialLaReservaTemporalSigueSiendoTodoONada() throws Exception {
+        when(reservaService.reservarTemporal(any())).thenReturn(RESPUESTA);
+
+        conToken(post("/reservas/temporales").contentType(MediaType.APPLICATION_JSON).content(BODY),
+                Rol.SISTEMA_CLIENTE).andExpect(status().isCreated());
+
+        ArgumentCaptor<ReservaTemporalRequest> pedido = ArgumentCaptor.forClass(ReservaTemporalRequest.class);
+        verify(reservaService).reservarTemporal(pedido.capture());
+        assertThat(pedido.getValue().esParcial()).isFalse();
     }
 
     @Test

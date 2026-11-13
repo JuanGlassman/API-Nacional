@@ -97,20 +97,26 @@ public class ReservaService {
         Map<Par, Integer> ofrecido = new LinkedHashMap<>();
         Map<Long, Recurso> recursos = new HashMap<>();
         cargarOfrecido(oferta, ofrecido, recursos);
-        Map<Par, Integer> pedido = elegirPedido(request, ofrecido);
+        Map<Par, Integer> solicitado = elegirPedido(request, ofrecido);
 
-        Map<String, Ong> ongs = buscarOngs(pedido.keySet());
-        Map<Par, InventarioOng> inventario = bloquearInventario(pedido.keySet());
+        Map<String, Ong> ongs = buscarOngs(solicitado.keySet());
+        Map<Par, InventarioOng> inventario = bloquearInventario(solicitado.keySet());
 
         // Revalidar reemplaza los bloqueos anteriores de la oferta; si esto falla, la transacción los restituye
         existentes.stream()
                 .filter(r -> r.getEstado() == EstadoReserva.BLOQUEADA)
                 .forEach(r -> liberar(r, ahora));
 
-        verificarDisponibilidad(pedido, inventario, ongs, recursos, ahora);
+        Map<Par, Integer> pedido = solicitado;
+        if (request.esParcial()) {
+            pedido = ajustarAlLibre(solicitado, inventario, ongs, recursos, ahora);
+        } else {
+            verificarDisponibilidad(solicitado, inventario, ongs, recursos, ahora);
+        }
+        Map<Par, Integer> aReservar = pedido;
 
         List<Reserva> nuevas = new ArrayList<>();
-        pedido.forEach((par, cantidad) -> {
+        aReservar.forEach((par, cantidad) -> {
             Reserva reserva = new Reserva();
             reserva.setOng(ongs.get(par.ongCodigo()));
             reserva.setRecurso(recursos.get(par.recursoId()));
@@ -307,6 +313,27 @@ public class ReservaService {
         if (!faltantes.isEmpty()) {
             throw new ConflictoException("Recursos insuficientes: " + String.join("; ", faltantes));
         }
+    }
+
+    // Reserva parcial: de cada par se toma lo que haya libre, hasta lo pedido, y se omiten los que no tienen nada.
+    // Si no queda ningún par con libre se informa igual que en el todo o nada (409 con los faltantes).
+    private Map<Par, Integer> ajustarAlLibre(Map<Par, Integer> pedido, Map<Par, InventarioOng> inventario,
+                                             Map<String, Ong> ongs, Map<Long, Recurso> recursos,
+                                             LocalDateTime ahora) {
+        Map<Par, Integer> ajustado = new LinkedHashMap<>();
+        pedido.forEach((par, cantidad) -> {
+            InventarioOng fila = inventario.get(par);
+            long stock = fila == null ? 0 : fila.getCantidadDisponible();
+            long libre = stock - reservaRepository.sumarActivas(ongs.get(par.ongCodigo()).getId(), par.recursoId(), ahora);
+            int reservable = (int) Math.min(cantidad, Math.max(libre, 0));
+            if (reservable > 0) {
+                ajustado.put(par, reservable);
+            }
+        });
+        if (ajustado.isEmpty()) {
+            verificarDisponibilidad(pedido, inventario, ongs, recursos, ahora);
+        }
+        return ajustado;
     }
 
     private void liberar(Reserva reserva, LocalDateTime ahora) {
