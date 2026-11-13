@@ -29,8 +29,10 @@ public class ReservaController {
     @PostMapping("/reservas/temporales")
     @PreAuthorize("hasAnyRole('SISTEMA_CLIENTE', 'ADMIN')")
     @Operation(summary = "Reserva temporal (validación)",
-            description = "Bloquea los recursos que ofrece una oferta ya guardada por un día. Todo o nada: si algún "
-                    + "recurso no alcanza responde 409 y no bloquea nada. Repetirla reemplaza los bloqueos anteriores.")
+            description = "Bloquea los recursos que ofrece una oferta ya guardada por un día. Por defecto es todo o nada: "
+                    + "si algún recurso no alcanza responde 409 y no bloquea nada. Con parcial=true bloquea lo que haya "
+                    + "libre de cada recurso y solo responde 409 si no puede bloquear nada. Repetirla reemplaza los "
+                    + "bloqueos anteriores.")
     @ApiResponse(responseCode = "201", description = "Recursos bloqueados")
     public ResponseEntity<ReservaResponse> reservarTemporal(@Valid @RequestBody ReservaTemporalRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(reservaService.reservarTemporal(request));
