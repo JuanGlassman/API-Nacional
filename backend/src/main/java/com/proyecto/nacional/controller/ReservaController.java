@@ -4,6 +4,8 @@ import com.proyecto.nacional.dto.reservas.ReservaLiberacionRequest;
 import com.proyecto.nacional.dto.reservas.ReservaRequest;
 import com.proyecto.nacional.dto.reservas.ReservaResponse;
 import com.proyecto.nacional.dto.reservas.ReservaTemporalRequest;
+import com.proyecto.nacional.dto.reservas.ValidacionRequest;
+import com.proyecto.nacional.dto.reservas.ValidacionResponse;
 import com.proyecto.nacional.service.ReservaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,6 +38,20 @@ public class ReservaController {
     @ApiResponse(responseCode = "201", description = "Recursos bloqueados")
     public ResponseEntity<ReservaResponse> reservarTemporal(@Valid @RequestBody ReservaTemporalRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(reservaService.reservarTemporal(request));
+    }
+
+    @PostMapping("/validaciones")
+    @PreAuthorize("hasAnyRole('SISTEMA_CLIENTE', 'ADMIN')")
+    @Operation(summary = "Validar las ofertas de un lote",
+            description = "Reparte lo que pide el lote entre las ofertas guardadas y bloquea por un día los recursos "
+                    + "asignados. Por cada recurso se prioriza a las ONGs de mejor nivel en su categoría (especialista "
+                    + "antes que apoyo), después a la oferta más antigua, y no se reserva más de lo que pide el lote ni "
+                    + "más del stock libre. Una ONG sin nivel en la categoría no está habilitada. Una oferta sin "
+                    + "recursos asignados vuelve con aprobada=false. Si el lote ya tiene bloqueos vigentes devuelve "
+                    + "esos mismos; responde 409 si tiene recursos comprometidos.")
+    @ApiResponse(responseCode = "201", description = "Resultado por oferta; los recursos asignados quedan bloqueados")
+    public ResponseEntity<ValidacionResponse> validar(@Valid @RequestBody ValidacionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(reservaService.validar(request));
     }
 
     @PostMapping("/reservas/definitivas")

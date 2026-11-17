@@ -87,10 +87,13 @@ Bonita (`SISTEMA_CLIENTE`) o `ADMIN` reservan los recursos de las ONGs que ofrec
 
 | Método y ruta | Descripción |
 | --- | --- |
+| `POST /validaciones` | Validación de un lote (`{emergenciaId, loteId}`). Reparte lo que pide el lote de cada recurso entre los aportes de las ONGs de todas sus ofertas guardadas y bloquea lo asignado por 24 horas. Prioridad: primero la ONG de mejor nivel en la categoría del recurso (`ESPECIALISTA` antes que `APOYO`), después la oferta más antigua. No reserva más de lo que pide el lote ni más del stock libre, y una ONG sin nivel en la categoría no está habilitada. Responde `{hayOfertasHabilitadas, resultados[{ofertaId, aprobada, items}]}`; una oferta sin recursos asignados vuelve con `aprobada: false`. Repetirla con bloqueos vigentes devuelve los mismos; 409 si el lote tiene recursos comprometidos |
 | `POST /reservas/temporales` | Validación. Bloquea por 24 horas (`RESERVAS_BLOQUEO_HORAS`) todo lo ofrecido, o solo los `items` indicados. Por defecto es todo o nada: 409 si algún recurso no alcanza. Con `"parcial": true` bloquea lo que haya libre de cada recurso (hasta lo pedido, omitiendo los que no tienen nada) y solo responde 409 si no puede bloquear nada; la respuesta trae las cantidades realmente bloqueadas. Repetirla reemplaza los bloqueos anteriores |
 | `POST /reservas/definitivas` | Oferta adjudicada. Convierte los bloqueos en compromiso, que dura hasta la liberación. Si el bloqueo venció, vuelve a comprobar el stock (409 si ya no alcanza) |
 | `POST /reservas/liberaciones` | Finalización. Libera los recursos de la oferta (o solo los de `ongCodigo`). Repetirla no cambia nada |
 | `GET /reservas?emergenciaId&loteId&ofertaId` | Estado de las reservas. Un bloqueo vencido se informa como `EXPIRADA` |
+
+Categorías y niveles: cada recurso del catálogo tiene una `categoria` (`SALUD`, `ALIMENTOS_Y_AGUA`, `ABRIGO`, `RESCATE_Y_EQUIPAMIENTO`) y la tabla `ong_categoria_nivel` guarda el nivel de cada ONG por categoría. El seed los carga para las 5 ONGs; una ONG dada de alta después necesita sus filas para poder recibir recursos en la validación. `POST /reservas/temporales` se mantiene tal cual, sin prioridades ni tope del lote.
 
 Las ONGs se identifican en estos contratos (ofertas, ítems de la reserva y liberación) por su `codigo` común (`ongCodigo`), el mismo en la aplicación local; el `id` numérico es propio de cada base. Los tres `POST` reciben `{emergenciaId, loteId, ofertaId}`. Cada operación toma con `SELECT ... FOR UPDATE` la oferta y las filas de inventario involucradas antes de calcular lo libre, así que dos reservas simultáneas sobre la misma ONG se serializan en PostgreSQL.
 

@@ -14,6 +14,7 @@ import com.proyecto.nacional.model.Ong;
 import com.proyecto.nacional.model.Recurso;
 import com.proyecto.nacional.repository.CuentaRepository;
 import com.proyecto.nacional.repository.InventarioOngRepository;
+import com.proyecto.nacional.repository.OngCategoriaNivelRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
 import com.proyecto.nacional.repository.ReservaRepository;
@@ -45,6 +46,7 @@ public class OngService {
     private final InventarioOngRepository inventarioOngRepository;
     private final CuentaRepository cuentaRepository;
     private final ReservaRepository reservaRepository;
+    private final OngCategoriaNivelRepository ongCategoriaNivelRepository;
     private final Clock clock;
     private final OngMapper ongMapper;
 
@@ -124,6 +126,7 @@ public class OngService {
         }
         // Lo que queda son reservas liberadas o vencidas: solo historial
         reservaRepository.deleteByOngId(id);
+        ongCategoriaNivelRepository.deleteByOngId(id);
         inventarioOngRepository.deleteByOngId(id);
         ongRepository.delete(ong);
         log.info("ONG eliminada junto con su inventario. id={}", id);
