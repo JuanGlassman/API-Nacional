@@ -12,6 +12,8 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     List<Reserva> findByEmergenciaIdAndLoteIdAndOfertaIdOrderByIdAsc(Long emergenciaId, Long loteId, Long ofertaId);
 
+    List<Reserva> findByEmergenciaIdAndLoteIdOrderByIdAsc(Long emergenciaId, Long loteId);
+
     // Cantidad que hoy tienen tomada las reservas de un recurso de una ONG: las comprometidas, y las
     // bloqueadas que todavía no vencieron
     @Query("""

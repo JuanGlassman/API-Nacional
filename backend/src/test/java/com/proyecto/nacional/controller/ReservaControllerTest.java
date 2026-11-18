@@ -3,6 +3,7 @@ package com.proyecto.nacional.controller;
 import com.proyecto.nacional.config.SecurityConfig;
 import com.proyecto.nacional.dto.reservas.ReservaResponse;
 import com.proyecto.nacional.dto.reservas.ReservaTemporalRequest;
+import com.proyecto.nacional.dto.reservas.ValidacionResponse;
 import com.proyecto.nacional.exception.ConflictoException;
 import com.proyecto.nacional.exception.GlobalExceptionHandler;
 import com.proyecto.nacional.exception.SolicitudInvalidaException;
@@ -115,6 +116,29 @@ class ReservaControllerTest {
                 Rol.SISTEMA_CLIENTE).andExpect(status().isOk());
         conToken(post("/reservas/liberaciones").contentType(MediaType.APPLICATION_JSON).content(BODY),
                 Rol.SISTEMA_CLIENTE).andExpect(status().isOk());
+    }
+
+    @Test
+    void bonitaValidaElLoteYRecibe201() throws Exception {
+        when(reservaService.validar(any())).thenReturn(
+                new ValidacionResponse(1L, 1L, true, List.of(new ValidacionResponse.ResultadoOferta(1L, true, List.of()))));
+
+        conToken(post("/validaciones").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"emergenciaId\":1,\"loteId\":1}"), Rol.SISTEMA_CLIENTE)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.hayOfertasHabilitadas").value(true))
+                .andExpect(jsonPath("$.resultados[0].ofertaId").value(1))
+                .andExpect(jsonPath("$.resultados[0].aprobada").value(true));
+    }
+
+    @Test
+    void laValidacionExigeLoteYEmergenciaYUnaOngNoPuedeHacerla() throws Exception {
+        conToken(post("/validaciones").contentType(MediaType.APPLICATION_JSON).content("{}"), Rol.SISTEMA_CLIENTE)
+                .andExpect(status().isBadRequest());
+        conToken(post("/validaciones").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"emergenciaId\":1,\"loteId\":1}"), Rol.ONG)
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(reservaService);
     }
 
     @Test

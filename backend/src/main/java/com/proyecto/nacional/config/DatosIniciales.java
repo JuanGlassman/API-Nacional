@@ -1,12 +1,16 @@
 package com.proyecto.nacional.config;
 
+import com.proyecto.nacional.model.CategoriaRecurso;
 import com.proyecto.nacional.model.Cuenta;
 import com.proyecto.nacional.model.InventarioOng;
+import com.proyecto.nacional.model.NivelCompetencia;
 import com.proyecto.nacional.model.Ong;
+import com.proyecto.nacional.model.OngCategoriaNivel;
 import com.proyecto.nacional.model.Recurso;
 import com.proyecto.nacional.model.Rol;
 import com.proyecto.nacional.repository.CuentaRepository;
 import com.proyecto.nacional.repository.InventarioOngRepository;
+import com.proyecto.nacional.repository.OngCategoriaNivelRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +36,7 @@ import java.util.Map;
 @Order(2)
 public class DatosIniciales implements CommandLineRunner {
 
-    private record RecursoSeed(String nombre, String unidadMedida) {
+    private record RecursoSeed(String nombre, String unidadMedida, CategoriaRecurso categoria) {
     }
 
     private record OngSeed(String razonSocial, String bonitaGroupPath, String username, String codigo) {
@@ -43,16 +47,16 @@ public class DatosIniciales implements CommandLineRunner {
     }
 
     private static final List<RecursoSeed> RECURSOS = List.of(
-            new RecursoSeed("Raciones de alimento", "raciones"),   // 1
-            new RecursoSeed("Paramédicos", "personas"),            // 2
-            new RecursoSeed("Frazadas", "unidades"),               // 3
-            new RecursoSeed("Bombas de agua", "unidades"),         // 4
-            new RecursoSeed("Agua potable", "litros"),             // 5
-            new RecursoSeed("Carpas", "unidades"),                 // 6
-            new RecursoSeed("Botes de rescate", "unidades"),       // 7
-            new RecursoSeed("Kits de higiene", "unidades"),        // 8
-            new RecursoSeed("Generadores eléctricos", "unidades"), // 9
-            new RecursoSeed("Médicos", "personas"));               // 10
+            new RecursoSeed("Raciones de alimento", "raciones", CategoriaRecurso.ALIMENTOS_Y_AGUA),   // 1
+            new RecursoSeed("Paramédicos", "personas", CategoriaRecurso.SALUD),            // 2
+            new RecursoSeed("Frazadas", "unidades", CategoriaRecurso.ABRIGO),               // 3
+            new RecursoSeed("Bombas de agua", "unidades", CategoriaRecurso.RESCATE_Y_EQUIPAMIENTO),         // 4
+            new RecursoSeed("Agua potable", "litros", CategoriaRecurso.ALIMENTOS_Y_AGUA),             // 5
+            new RecursoSeed("Carpas", "unidades", CategoriaRecurso.ABRIGO),                 // 6
+            new RecursoSeed("Botes de rescate", "unidades", CategoriaRecurso.RESCATE_Y_EQUIPAMIENTO),       // 7
+            new RecursoSeed("Kits de higiene", "unidades", CategoriaRecurso.SALUD),        // 8
+            new RecursoSeed("Generadores eléctricos", "unidades", CategoriaRecurso.RESCATE_Y_EQUIPAMIENTO), // 9
+            new RecursoSeed("Médicos", "personas", CategoriaRecurso.SALUD));               // 10
 
     private static final List<OngSeed> ONGS = List.of(
             new OngSeed("Cruz Roja Argentina – Filial La Plata", "/ONG/CruzRojaLaPlata", "cruzroja",
@@ -78,9 +82,27 @@ public class DatosIniciales implements CommandLineRunner {
             new InventarioSeed(4, 5, 30000),                                   // Banco de Alimentos: agua potable
             new InventarioSeed(5, 6, 80), new InventarioSeed(5, 9, 3));        // Techo: carpas, generadores
 
+    // (ong, categoría, nivel); ong es el número de orden del seed local (1 a N). Sin fila la ONG no está
+    // habilitada en la categoría. Se carga junto con las ONGs.
+    private record NivelSeed(int ong, CategoriaRecurso categoria, NivelCompetencia nivel) {
+    }
+
+    private static final List<NivelSeed> NIVELES = List.of(
+            new NivelSeed(1, CategoriaRecurso.SALUD, NivelCompetencia.ESPECIALISTA),                 // Cruz Roja
+            new NivelSeed(1, CategoriaRecurso.ABRIGO, NivelCompetencia.APOYO),
+            new NivelSeed(2, CategoriaRecurso.ALIMENTOS_Y_AGUA, NivelCompetencia.ESPECIALISTA),      // Cáritas
+            new NivelSeed(2, CategoriaRecurso.ABRIGO, NivelCompetencia.APOYO),
+            new NivelSeed(2, CategoriaRecurso.SALUD, NivelCompetencia.APOYO),
+            new NivelSeed(3, CategoriaRecurso.RESCATE_Y_EQUIPAMIENTO, NivelCompetencia.ESPECIALISTA), // Bomberos
+            new NivelSeed(3, CategoriaRecurso.SALUD, NivelCompetencia.APOYO),
+            new NivelSeed(4, CategoriaRecurso.ALIMENTOS_Y_AGUA, NivelCompetencia.ESPECIALISTA),      // Banco de Alimentos
+            new NivelSeed(5, CategoriaRecurso.ABRIGO, NivelCompetencia.ESPECIALISTA),                // Techo
+            new NivelSeed(5, CategoriaRecurso.RESCATE_Y_EQUIPAMIENTO, NivelCompetencia.APOYO));
+
     private final RecursoRepository recursoRepository;
     private final OngRepository ongRepository;
     private final InventarioOngRepository inventarioOngRepository;
+    private final OngCategoriaNivelRepository nivelRepository;
     private final CuentaRepository cuentaRepository;
     private final PasswordEncoder passwordEncoder;
     private final String passwordOngs;
@@ -88,12 +110,14 @@ public class DatosIniciales implements CommandLineRunner {
     public DatosIniciales(RecursoRepository recursoRepository,
                           OngRepository ongRepository,
                           InventarioOngRepository inventarioOngRepository,
+                          OngCategoriaNivelRepository nivelRepository,
                           CuentaRepository cuentaRepository,
                           PasswordEncoder passwordEncoder,
                           @Value("${cuentas.ong.password:}") String passwordOngs) {
         this.recursoRepository = recursoRepository;
         this.ongRepository = ongRepository;
         this.inventarioOngRepository = inventarioOngRepository;
+        this.nivelRepository = nivelRepository;
         this.cuentaRepository = cuentaRepository;
         this.passwordEncoder = passwordEncoder;
         this.passwordOngs = passwordOngs;
@@ -105,6 +129,7 @@ public class DatosIniciales implements CommandLineRunner {
         Map<Integer, Recurso> recursos = cargarRecursos();
         Map<Integer, Ong> ongs = cargarOngs();
         cargarInventario(recursos, ongs);
+        cargarNiveles(ongs);
         crearCuentasOng(ongs);
     }
 
@@ -118,6 +143,11 @@ public class DatosIniciales implements CommandLineRunner {
                 recurso = new Recurso();
                 recurso.setNombre(seed.nombre());
                 recurso.setUnidadMedida(seed.unidadMedida());
+                recurso.setCategoria(seed.categoria());
+                recurso = recursoRepository.save(recurso);
+            } else if (recurso != null && recurso.getCategoria() == null) {
+                // Bases creadas antes de que existieran las categorías
+                recurso.setCategoria(seed.categoria());
                 recurso = recursoRepository.save(recurso);
             }
             if (recurso != null) {
@@ -179,6 +209,39 @@ public class DatosIniciales implements CommandLineRunner {
             inventarioOngRepository.save(inventario);
         }
         log.info("Seed: {} ítems de inventario creados", INVENTARIO.size());
+    }
+
+    // Solo si la tabla está vacía, así reiniciar no pisa lo editado. Las bases anteriores a los niveles ya
+    // tienen ONGs cargadas: se las ubica por el path de su grupo de Bonita.
+    private void cargarNiveles(Map<Integer, Ong> recienCreadas) {
+        if (nivelRepository.count() > 0) {
+            return;
+        }
+        Map<Integer, Ong> ongs = recienCreadas;
+        if (ongs.isEmpty()) {
+            ongs = new HashMap<>();
+            for (Ong ong : ongRepository.findAll()) {
+                for (int i = 0; i < ONGS.size(); i++) {
+                    if (ONGS.get(i).bonitaGroupPath().equals(ong.getBonitaGroupPath())) {
+                        ongs.put(i + 1, ong);
+                    }
+                }
+            }
+        }
+        int cargados = 0;
+        for (NivelSeed seed : NIVELES) {
+            Ong ong = ongs.get(seed.ong());
+            if (ong == null) {
+                continue;
+            }
+            OngCategoriaNivel nivel = new OngCategoriaNivel();
+            nivel.setOng(ong);
+            nivel.setCategoria(seed.categoria());
+            nivel.setNivel(seed.nivel());
+            nivelRepository.save(nivel);
+            cargados++;
+        }
+        log.info("Seed: {} niveles de competencia creados", cargados);
     }
 
     private void crearCuentasOng(Map<Integer, Ong> ongs) {

@@ -13,6 +13,7 @@ import com.proyecto.nacional.repository.CuentaRepository;
 import com.proyecto.nacional.repository.InventarioOngRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
+import com.proyecto.nacional.repository.OngCategoriaNivelRepository;
 import com.proyecto.nacional.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,8 @@ class OngServiceTest {
     private CuentaRepository cuentaRepository;
     @Mock
     private ReservaRepository reservaRepository;
+    @Mock
+    private OngCategoriaNivelRepository ongCategoriaNivelRepository;
     @Spy
     private Clock clock = Clock.fixed(Instant.parse("2026-10-19T12:00:00Z"), ZoneOffset.UTC);
     @Spy

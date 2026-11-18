@@ -5,17 +5,24 @@ import com.proyecto.nacional.dto.reservas.ReservaRequest;
 import com.proyecto.nacional.dto.reservas.ReservaResponse;
 import com.proyecto.nacional.dto.reservas.ReservaResponse.ItemReservaResponse;
 import com.proyecto.nacional.dto.reservas.ReservaTemporalRequest;
+import com.proyecto.nacional.dto.reservas.ValidacionRequest;
+import com.proyecto.nacional.dto.reservas.ValidacionResponse;
 import com.proyecto.nacional.exception.ConflictoException;
 import com.proyecto.nacional.exception.RecursoNoEncontradoException;
 import com.proyecto.nacional.exception.SolicitudInvalidaException;
+import com.proyecto.nacional.model.CategoriaRecurso;
 import com.proyecto.nacional.model.EstadoReserva;
 import com.proyecto.nacional.model.InventarioOng;
+import com.proyecto.nacional.model.NivelCompetencia;
 import com.proyecto.nacional.model.Oferta;
+import com.proyecto.nacional.model.OfertaAporte;
 import com.proyecto.nacional.model.Ong;
+import com.proyecto.nacional.model.OngCategoriaNivel;
 import com.proyecto.nacional.model.Recurso;
 import com.proyecto.nacional.model.Reserva;
 import com.proyecto.nacional.repository.InventarioOngRepository;
 import com.proyecto.nacional.repository.OfertaRepository;
+import com.proyecto.nacional.repository.OngCategoriaNivelRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
 import com.proyecto.nacional.repository.ReservaRepository;
@@ -34,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Reserva de los recursos de las ONGs que ofrece una oferta, en tres pasos que llama Bonita:
@@ -58,6 +66,7 @@ public class ReservaService {
     private final RecursoRepository recursoRepository;
     private final InventarioOngRepository inventarioOngRepository;
     private final ReservaRepository reservaRepository;
+    private final OngCategoriaNivelRepository nivelRepository;
     private final Clock clock;
     private final long bloqueoHoras;
 
@@ -66,6 +75,7 @@ public class ReservaService {
                           RecursoRepository recursoRepository,
                           InventarioOngRepository inventarioOngRepository,
                           ReservaRepository reservaRepository,
+                          OngCategoriaNivelRepository nivelRepository,
                           Clock clock,
                           @Value("${reservas.bloqueo-horas:24}") long bloqueoHoras) {
         this.ofertaRepository = ofertaRepository;
@@ -73,6 +83,7 @@ public class ReservaService {
         this.recursoRepository = recursoRepository;
         this.inventarioOngRepository = inventarioOngRepository;
         this.reservaRepository = reservaRepository;
+        this.nivelRepository = nivelRepository;
         this.clock = clock;
         this.bloqueoHoras = bloqueoHoras;
     }
@@ -116,22 +127,127 @@ public class ReservaService {
         Map<Par, Integer> aReservar = pedido;
 
         List<Reserva> nuevas = new ArrayList<>();
-        aReservar.forEach((par, cantidad) -> {
-            Reserva reserva = new Reserva();
-            reserva.setOng(ongs.get(par.ongCodigo()));
-            reserva.setRecurso(recursos.get(par.recursoId()));
-            reserva.setCantidad(cantidad);
-            reserva.setEstado(EstadoReserva.BLOQUEADA);
-            reserva.setEmergenciaId(request.emergenciaId());
-            reserva.setLoteId(request.loteId());
-            reserva.setOfertaId(request.ofertaId());
-            reserva.setFechaCreacion(ahora);
-            reserva.setExpiraEn(ahora.plusHours(bloqueoHoras));
-            nuevas.add(reservaRepository.save(reserva));
-        });
+        aReservar.forEach((par, cantidad) -> nuevas.add(bloquear(request.emergenciaId(), request.loteId(),
+                request.ofertaId(), ongs.get(par.ongCodigo()), recursos.get(par.recursoId()), cantidad, ahora)));
         log.info("Reserva temporal. oferta={} lote={} emergencia={} items={} expiraEn={}", request.ofertaId(),
                 request.loteId(), request.emergenciaId(), nuevas.size(), ahora.plusHours(bloqueoHoras));
         return armarRespuesta(request.emergenciaId(), request.loteId(), request.ofertaId(), nuevas, ahora);
+    }
+
+    // ---------- Validación del lote ----------
+
+    /**
+     * Valida de una vez todas las ofertas de un lote y deja bloqueados los recursos que se les asignan.
+     * Por cada recurso reparte lo que pide el lote entre los aportes de las ONGs: primero las ONGs de mejor
+     * nivel en la categoría del recurso, después la oferta más antigua, hasta cubrir lo pedido o agotar el
+     * stock libre. Una ONG sin nivel en la categoría no está habilitada y no recibe nada.
+     * Repetirla con bloqueos vigentes devuelve esos mismos bloqueos sin recalcular.
+     */
+    @Transactional
+    public ValidacionResponse validar(ValidacionRequest request) {
+        List<Oferta> ofertas = ofertaRepository.bloquearPorLote(request.emergenciaId(), request.loteId());
+        if (ofertas.isEmpty()) {
+            throw new RecursoNoEncontradoException("No hay ofertas guardadas del lote " + request.loteId()
+                    + " de la emergencia " + request.emergenciaId());
+        }
+        LocalDateTime ahora = LocalDateTime.now(clock);
+
+        List<Reserva> existentes = reservaRepository.findByEmergenciaIdAndLoteIdOrderByIdAsc(
+                request.emergenciaId(), request.loteId());
+        if (existentes.stream().anyMatch(r -> r.getEstado() == EstadoReserva.COMPROMETIDA)) {
+            throw new ConflictoException("El lote " + request.loteId()
+                    + " ya tiene recursos comprometidos; libérelos antes de volver a validar");
+        }
+        if (existentes.stream().anyMatch(r -> activa(r, ahora))) {
+            return armarValidacion(request, ofertas, existentes, ahora);
+        }
+        // Lo que quede son bloqueos vencidos: dejan de contar
+        existentes.stream().filter(r -> r.getEstado() == EstadoReserva.BLOQUEADA).forEach(r -> liberar(r, ahora));
+
+        Map<Long, Recurso> recursos = new HashMap<>();
+        Map<Long, Integer> requerido = new HashMap<>();
+        Map<Long, Map<Par, Integer>> ofrecidoPorOferta = new LinkedHashMap<>();
+        Set<Par> pares = new HashSet<>();
+        for (Oferta oferta : ofertas) {
+            Map<Par, Integer> ofrecido = new LinkedHashMap<>();
+            sumarOfrecido(oferta, ofrecido, recursos, requerido);
+            ofrecidoPorOferta.put(oferta.getOfertaId(), ofrecido);
+            pares.addAll(ofrecido.keySet());
+        }
+
+        List<Reserva> nuevas = new ArrayList<>();
+        if (!pares.isEmpty()) {
+            Map<String, Ong> ongs = buscarOngs(pares);
+            Map<Par, InventarioOng> inventario = bloquearInventario(pares);
+            Map<String, Map<CategoriaRecurso, NivelCompetencia>> niveles = nivelesDe(ongs.keySet());
+            Map<Long, LocalDateTime> fechas = new HashMap<>();
+            ofertas.forEach(o -> fechas.put(o.getOfertaId(), o.getFechaOferta()));
+
+            for (Long recursoId : new TreeSet<>(recursos.keySet())) {
+                Recurso recurso = recursos.get(recursoId);
+                List<AsignadorRecursos.Candidato> candidatos = new ArrayList<>();
+                Map<String, Integer> libre = new HashMap<>();
+                ofrecidoPorOferta.forEach((ofertaId, ofrecido) -> ofrecido.forEach((par, cantidad) -> {
+                    if (!par.recursoId().equals(recursoId)) {
+                        return;
+                    }
+                    int prioridad = prioridad(recurso, niveles.get(par.ongCodigo()));
+                    if (prioridad == 0) {
+                        return; // ONG no habilitada en la categoría
+                    }
+                    candidatos.add(new AsignadorRecursos.Candidato(ofertaId, fechas.get(ofertaId),
+                            par.ongCodigo(), prioridad, cantidad));
+                    libre.computeIfAbsent(par.ongCodigo(), codigo -> libre(ongs.get(codigo), recurso,
+                            inventario.get(par), ahora));
+                }));
+                for (AsignadorRecursos.Asignacion a : AsignadorRecursos.asignar(
+                        requerido.getOrDefault(recursoId, Integer.MAX_VALUE), candidatos, libre)) {
+                    nuevas.add(bloquear(request.emergenciaId(), request.loteId(), a.ofertaId(),
+                            ongs.get(a.ongCodigo()), recurso, a.cantidad(), ahora));
+                }
+            }
+        }
+        log.info("Validación del lote. lote={} emergencia={} ofertas={} bloqueos={}", request.loteId(),
+                request.emergenciaId(), ofertas.size(), nuevas.size());
+        return armarValidacion(request, ofertas, nuevas, ahora);
+    }
+
+    // Sin categoría el recurso no distingue ONGs (todas con la misma prioridad); con categoría, 0 = no habilitada
+    private int prioridad(Recurso recurso, Map<CategoriaRecurso, NivelCompetencia> nivelesOng) {
+        if (recurso.getCategoria() == null) {
+            return NivelCompetencia.ESPECIALISTA.getPrioridad();
+        }
+        NivelCompetencia nivel = nivelesOng == null ? null : nivelesOng.get(recurso.getCategoria());
+        return nivel == null ? 0 : nivel.getPrioridad();
+    }
+
+    private Map<String, Map<CategoriaRecurso, NivelCompetencia>> nivelesDe(Set<String> ongCodigos) {
+        Map<String, Map<CategoriaRecurso, NivelCompetencia>> niveles = new HashMap<>();
+        for (OngCategoriaNivel fila : nivelRepository.findByOngCodigoIn(ongCodigos)) {
+            niveles.computeIfAbsent(fila.getOng().getCodigo(), codigo -> new HashMap<>())
+                    .put(fila.getCategoria(), fila.getNivel());
+        }
+        return niveles;
+    }
+
+    private int libre(Ong ong, Recurso recurso, InventarioOng fila, LocalDateTime ahora) {
+        long stock = fila == null ? 0 : fila.getCantidadDisponible();
+        long libre = stock - reservaRepository.sumarActivas(ong.getId(), recurso.getId(), ahora);
+        return (int) Math.max(libre, 0);
+    }
+
+    private ValidacionResponse armarValidacion(ValidacionRequest request, List<Oferta> ofertas,
+                                               List<Reserva> reservas, LocalDateTime ahora) {
+        List<ValidacionResponse.ResultadoOferta> resultados = ofertas.stream().map(oferta -> {
+            List<ItemReservaResponse> items = reservas.stream()
+                    .filter(r -> r.getOfertaId().equals(oferta.getOfertaId()) && activa(r, ahora))
+                    .sorted(Comparator.comparing(Reserva::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(r -> itemRespuesta(r, ahora))
+                    .toList();
+            return new ValidacionResponse.ResultadoOferta(oferta.getOfertaId(), !items.isEmpty(), items);
+        }).toList();
+        return new ValidacionResponse(request.emergenciaId(), request.loteId(),
+                resultados.stream().anyMatch(ValidacionResponse.ResultadoOferta::aprobada), resultados);
     }
 
     // ---------- Reserva definitiva ----------
@@ -228,20 +344,46 @@ public class ReservaService {
 
     // Lo que ofrece cada ONG de cada recurso, sumando los aportes de la oferta que repiten recurso
     private void cargarOfrecido(Oferta oferta, Map<Par, Integer> ofrecido, Map<Long, Recurso> recursos) {
+        sumarOfrecido(oferta, ofrecido, recursos, null);
+        if (ofrecido.isEmpty()) {
+            throw new ConflictoException("La oferta no tiene aportes de ninguna ONG para reservar");
+        }
+    }
+
+    // Igual que cargarOfrecido pero sin exigir aportes; si se pasa requerido, acumula lo que pide el lote de cada recurso
+    private void sumarOfrecido(Oferta oferta, Map<Par, Integer> ofrecido, Map<Long, Recurso> recursos,
+                               Map<Long, Integer> requerido) {
         Map<String, Recurso> porNombre = new HashMap<>();
-        oferta.getAportes().forEach(aporte -> {
+        for (OfertaAporte aporte : oferta.getAportes()) {
             Recurso recurso = porNombre.computeIfAbsent(aporte.getRecursoNombre(), nombre ->
                     recursoRepository.findByNombre(nombre).orElseThrow(() -> new ConflictoException(
                             "El recurso '" + nombre + "' de la oferta no está en el catálogo")));
             recursos.put(recurso.getId(), recurso);
+            if (requerido != null) {
+                // Sin cantidad requerida el lote no pone tope
+                requerido.merge(recurso.getId(), aporte.getCantidadRequerida() == null
+                        ? Integer.MAX_VALUE : aporte.getCantidadRequerida(), Math::max);
+            }
             aporte.getPorOng().stream()
                     .filter(porOng -> porOng.getCantidadOfrecida() != null && porOng.getCantidadOfrecida() > 0)
                     .forEach(porOng -> ofrecido.merge(new Par(porOng.getOngCodigo(), recurso.getId()),
                             porOng.getCantidadOfrecida(), Integer::sum));
-        });
-        if (ofrecido.isEmpty()) {
-            throw new ConflictoException("La oferta no tiene aportes de ninguna ONG para reservar");
         }
+    }
+
+    private Reserva bloquear(Long emergenciaId, Long loteId, Long ofertaId, Ong ong, Recurso recurso,
+                             int cantidad, LocalDateTime ahora) {
+        Reserva reserva = new Reserva();
+        reserva.setOng(ong);
+        reserva.setRecurso(recurso);
+        reserva.setCantidad(cantidad);
+        reserva.setEstado(EstadoReserva.BLOQUEADA);
+        reserva.setEmergenciaId(emergenciaId);
+        reserva.setLoteId(loteId);
+        reserva.setOfertaId(ofertaId);
+        reserva.setFechaCreacion(ahora);
+        reserva.setExpiraEn(ahora.plusHours(bloqueoHoras));
+        return reservaRepository.save(reserva);
     }
 
     // Todo lo ofrecido, o solo los ítems pedidos (que deben estar en la oferta y no superarla)
@@ -360,10 +502,7 @@ public class ReservaService {
                                            List<Reserva> reservas, LocalDateTime ahora) {
         List<ItemReservaResponse> items = reservas.stream()
                 .sorted(Comparator.comparing(Reserva::getId))
-                .map(r -> new ItemReservaResponse(
-                        r.getOng().getCodigo(), r.getOng().getRazonSocial(),
-                        r.getRecurso().getId(), r.getRecurso().getNombre(), r.getRecurso().getUnidadMedida(),
-                        r.getCantidad(), estadoVisible(r, ahora), r.getExpiraEn()))
+                .map(r -> itemRespuesta(r, ahora))
                 .toList();
 
         String estado = resumir(items);
@@ -373,6 +512,13 @@ public class ReservaService {
                 .max(Comparator.naturalOrder())
                 .orElse(null);
         return new ReservaResponse(emergenciaId, loteId, ofertaId, estado, expiraEn, items);
+    }
+
+    private ItemReservaResponse itemRespuesta(Reserva r, LocalDateTime ahora) {
+        return new ItemReservaResponse(
+                r.getOng().getCodigo(), r.getOng().getRazonSocial(),
+                r.getRecurso().getId(), r.getRecurso().getNombre(), r.getRecurso().getUnidadMedida(),
+                r.getCantidad(), estadoVisible(r, ahora), r.getExpiraEn());
     }
 
     private String resumir(List<ItemReservaResponse> items) {

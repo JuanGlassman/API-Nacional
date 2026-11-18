@@ -2,6 +2,8 @@ package com.proyecto.nacional.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -27,4 +29,10 @@ public class Recurso {
 
     @Column(name = "unidad_medida", nullable = false, length = 30)
     private String unidadMedida;
+
+    // Define qué ONGs son especialistas en el recurso. Nullable: un recurso sin categoría no distingue
+    // prioridades entre ONGs al validar.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private CategoriaRecurso categoria;
 }

@@ -18,6 +18,7 @@ import com.proyecto.nacional.model.Recurso;
 import com.proyecto.nacional.model.Reserva;
 import com.proyecto.nacional.repository.InventarioOngRepository;
 import com.proyecto.nacional.repository.OfertaRepository;
+import com.proyecto.nacional.repository.OngCategoriaNivelRepository;
 import com.proyecto.nacional.repository.OngRepository;
 import com.proyecto.nacional.repository.RecursoRepository;
 import com.proyecto.nacional.repository.ReservaRepository;
@@ -64,6 +65,8 @@ class ReservaServiceTest {
     private InventarioOngRepository inventarioOngRepository;
     @Mock
     private ReservaRepository reservaRepository;
+    @Mock
+    private OngCategoriaNivelRepository nivelRepository;
 
     private ReservaService service;
     private Ong bomberos;
@@ -74,7 +77,7 @@ class ReservaServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(INSTANTE, ZoneOffset.UTC);
         service = new ReservaService(ofertaRepository, ongRepository, recursoRepository,
-                inventarioOngRepository, reservaRepository, clock, 24);
+                inventarioOngRepository, reservaRepository, nivelRepository, clock, 24);
 
         bomberos = new Ong();
         bomberos.setId(3L);
