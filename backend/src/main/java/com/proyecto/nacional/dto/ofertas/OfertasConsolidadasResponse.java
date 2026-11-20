@@ -7,8 +7,8 @@ public record OfertasConsolidadasResponse(Long emergenciaId, Long loteId, List<O
     public record OfertaResponse(Long id, String estado, LocalDateTime fechaOferta,
                                  LocalDateTime fechaModificacion, Integer numeroVersion,
                                  List<OngResponse> ongs, List<AporteResponse> aportes) {}
-    public record OngResponse(Long id, String razonSocial) {}
+    public record OngResponse(String codigo, String razonSocial) {}
     public record AporteResponse(Long itemLoteId, String recursoNombre, Integer cantidadRequerida,
                                  Integer totalOfrecido, List<AporteOngResponse> porOng) {}
-    public record AporteOngResponse(Long ongId, String razonSocial, Integer cantidadOfrecida) {}
+    public record AporteOngResponse(String ongCodigo, String razonSocial, Integer cantidadOfrecida) {}
 }

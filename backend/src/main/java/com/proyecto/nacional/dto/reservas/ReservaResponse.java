@@ -14,7 +14,7 @@ public record ReservaResponse(
         List<ItemReservaResponse> items
 ) {
     public record ItemReservaResponse(
-            Long ongId,
+            String ongCodigo,
             String razonSocial,
             Long recursoId,
             String recursoNombre,

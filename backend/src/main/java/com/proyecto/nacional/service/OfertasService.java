@@ -51,7 +51,7 @@ public class OfertasService {
         if (source.ongs() != null) {
             source.ongs().forEach(ong -> {
                 OfertaOng targetOng = new OfertaOng();
-                targetOng.setOngId(ong.id());
+                targetOng.setOngCodigo(ong.codigo());
                 targetOng.setRazonSocial(ong.razonSocial());
                 targetOng.setOferta(target);
                 target.getOngs().add(targetOng);
@@ -67,7 +67,7 @@ public class OfertasService {
             if (aporte.porOng() != null) {
                 aporte.porOng().forEach(porOng -> {
                     OfertaAporteOng targetPorOng = new OfertaAporteOng();
-                    targetPorOng.setOngId(porOng.ongId());
+                    targetPorOng.setOngCodigo(porOng.ongCodigo());
                     targetPorOng.setRazonSocial(porOng.razonSocial());
                     targetPorOng.setCantidadOfrecida(porOng.cantidadOfrecida());
                     targetPorOng.setAporte(targetAporte);
@@ -86,7 +86,7 @@ public class OfertasService {
                         oferta.getFechaModificacion(), oferta.getNumeroVersion(),
                         oferta.getOngs().stream()
                                 .map(ong -> new OfertasConsolidadasResponse.OngResponse(
-                                        ong.getOngId(), ong.getRazonSocial()))
+                                        ong.getOngCodigo(), ong.getRazonSocial()))
                                 .toList(),
                         oferta.getAportes().stream()
                                 .map(aporte -> new OfertasConsolidadasResponse.AporteResponse(
@@ -94,7 +94,7 @@ public class OfertasService {
                                         aporte.getCantidadRequerida(), aporte.getTotalOfrecido(),
                                         aporte.getPorOng().stream()
                                                 .map(ong -> new OfertasConsolidadasResponse.AporteOngResponse(
-                                                        ong.getOngId(), ong.getRazonSocial(),
+                                                        ong.getOngCodigo(), ong.getRazonSocial(),
                                                         ong.getCantidadOfrecida()))
                                                 .toList()))
                                 .toList()))

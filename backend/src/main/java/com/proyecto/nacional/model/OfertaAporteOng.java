@@ -18,7 +18,8 @@ import lombok.Setter;
 public class OfertaAporteOng {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long ongId;
+    // Código común de la ONG (identificador compartido con la app local)
+    private String ongCodigo;
     private String razonSocial;
     private Integer cantidadOfrecida;
     @ManyToOne

@@ -11,6 +11,11 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_nacional_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     networks:
       - sistema-nacional-network
 
@@ -31,7 +36,8 @@ services:
       BONITA_PASSWORD: ${BONITA_PASSWORD}
       CUENTAS_ONG_PASSWORD: ${CUENTAS_ONG_PASSWORD:-}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - sistema-nacional-network
 

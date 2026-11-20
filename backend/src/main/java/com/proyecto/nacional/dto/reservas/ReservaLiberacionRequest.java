@@ -7,7 +7,8 @@ public record ReservaLiberacionRequest(
         @NotNull @Schema(example = "1") Long emergenciaId,
         @NotNull @Schema(example = "1") Long loteId,
         @NotNull @Schema(example = "1") Long ofertaId,
-        @Schema(description = "Opcional. Si viene, solo se liberan los recursos de esa ONG", example = "1")
-        Long ongId
+        @Schema(description = "Opcional. Código común de la ONG; si viene, solo se liberan sus recursos",
+                example = "57f6bace-9f0e-4c1b-9ac8-0e3b09069e29")
+        String ongCodigo
 ) {
 }
