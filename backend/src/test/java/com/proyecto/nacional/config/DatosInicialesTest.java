@@ -74,15 +74,19 @@ class DatosInicialesTest {
         ArgumentCaptor<InventarioOng> inventario = ArgumentCaptor.forClass(InventarioOng.class);
         verify(inventarioOngRepository, atLeast(1)).save(inventario.capture());
         List<InventarioOng> items = inventario.getAllValues();
-        assertThat(items).hasSize(18);
-        assertThat(items.stream().mapToInt(InventarioOng::getCantidadDisponible).sum()).isEqualTo(54_370);
-        // Cruz Roja (la primera ONG): paramédicos 10, frazadas 200, kits de higiene 500, médicos 4
+        assertThat(items).hasSize(19);
+        assertThat(items.stream().mapToInt(InventarioOng::getCantidadDisponible).sum()).isEqualTo(54_814);
+        // Cruz Roja (la primera ONG): paramédicos 20, frazadas 200, kits de higiene 500, médicos 8
         assertThat(items.stream()
                 .filter(i -> i.getOng().getRazonSocial().startsWith("Cruz Roja"))
                 .collect(Collectors.toMap(i -> i.getRecurso().getNombre(), InventarioOng::getCantidadDisponible)))
                 .containsOnly(
-                        java.util.Map.entry("Paramédicos", 10), java.util.Map.entry("Frazadas", 200),
-                        java.util.Map.entry("Kits de higiene", 500), java.util.Map.entry("Médicos", 4));
+                        java.util.Map.entry("Paramédicos", 20), java.util.Map.entry("Frazadas", 200),
+                        java.util.Map.entry("Kits de higiene", 500), java.util.Map.entry("Médicos", 8));
+        // Techo tiene kits de higiene (SALUD) pero ningún nivel en SALUD: es el caso "sin recursos" de la demo
+        assertThat(items.stream()
+                .filter(i -> i.getOng().getRazonSocial().startsWith("Techo"))
+                .anyMatch(i -> i.getRecurso().getNombre().equals("Kits de higiene"))).isTrue();
         verify(cuentaRepository, never()).save(any());
 
         // Cada recurso trae su categoría
@@ -110,6 +114,7 @@ class DatosInicialesTest {
         when(ongRepository.count()).thenReturn(5L);
         when(recursoRepository.findByNombre(any())).thenReturn(java.util.Optional.of(new Recurso()));
         when(nivelRepository.count()).thenReturn(0L);
+        when(inventarioOngRepository.count()).thenReturn(19L);
         Ong cruzRoja = new Ong();
         cruzRoja.setId(1L);
         cruzRoja.setCodigo("57f6bace-9f0e-4c1b-9ac8-0e3b09069e29");
@@ -130,6 +135,7 @@ class DatosInicialesTest {
         when(recursoRepository.count()).thenReturn(10L);
         when(ongRepository.count()).thenReturn(5L);
         when(nivelRepository.count()).thenReturn(10L);
+        when(inventarioOngRepository.count()).thenReturn(19L);
         Recurso conCategoria = new Recurso();
         conCategoria.setCategoria(CategoriaRecurso.SALUD);
         when(recursoRepository.findByNombre(any())).thenReturn(java.util.Optional.of(conCategoria));

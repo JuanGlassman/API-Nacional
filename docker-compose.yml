@@ -35,6 +35,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       BONITA_PASSWORD: ${BONITA_PASSWORD}
       CUENTAS_ONG_PASSWORD: ${CUENTAS_ONG_PASSWORD:-}
+      SEED_VERSION: ${SEED_VERSION:-}
     depends_on:
       postgres:
         condition: service_healthy
