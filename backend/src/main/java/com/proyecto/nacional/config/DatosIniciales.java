@@ -70,17 +70,21 @@ public class DatosIniciales implements CommandLineRunner {
             new OngSeed("Techo Argentina – Regional Buenos Aires", "/ONG/TechoBuenosAires", "techo",
                     "16c85edc-ccb4-40f1-b648-bb28a9111fdc"));           // 5
 
+    // Tiene que coincidir con el INSERT INTO inventario_ong de db/seed/01-reset-y-seed.sql (app local).
+    // Pensado para la demo (db/demo/CASOS-DEMO.md): Techo tiene kits de higiene (SALUD) pero el SN no la
+    // habilita en esa categoría, que es lo que dispara el camino "sin recursos".
     private static final List<InventarioSeed> INVENTARIO = List.of(
-            new InventarioSeed(1, 2, 10), new InventarioSeed(1, 3, 200),       // Cruz Roja: paramédicos, frazadas
-            new InventarioSeed(2, 1, 800), new InventarioSeed(2, 3, 150),      // Cáritas: raciones, frazadas
-            new InventarioSeed(3, 2, 6), new InventarioSeed(3, 4, 4),          // Bomberos: paramédicos, bombas de agua
+            new InventarioSeed(1, 2, 20), new InventarioSeed(1, 3, 200),       // Cruz Roja: paramédicos, frazadas
+            new InventarioSeed(2, 1, 1000), new InventarioSeed(2, 3, 150),     // Cáritas: raciones, frazadas
+            new InventarioSeed(3, 2, 10), new InventarioSeed(3, 4, 8),         // Bomberos: paramédicos, bombas de agua
             new InventarioSeed(4, 1, 1500),                                    // Banco de Alimentos: raciones
-            new InventarioSeed(5, 3, 300), new InventarioSeed(5, 4, 2),        // Techo: frazadas, bombas de agua
-            new InventarioSeed(1, 8, 500), new InventarioSeed(1, 10, 4),       // Cruz Roja: kits de higiene, médicos
+            new InventarioSeed(5, 3, 300), new InventarioSeed(5, 4, 4),        // Techo: frazadas, bombas de agua
+            new InventarioSeed(1, 8, 500), new InventarioSeed(1, 10, 8),       // Cruz Roja: kits de higiene, médicos
             new InventarioSeed(2, 5, 20000), new InventarioSeed(2, 8, 800),    // Cáritas: agua potable, kits de higiene
             new InventarioSeed(3, 7, 6), new InventarioSeed(3, 9, 5),          // Bomberos: botes de rescate, generadores
             new InventarioSeed(4, 5, 30000),                                   // Banco de Alimentos: agua potable
-            new InventarioSeed(5, 6, 80), new InventarioSeed(5, 9, 3));        // Techo: carpas, generadores
+            new InventarioSeed(5, 6, 100), new InventarioSeed(5, 9, 3),        // Techo: carpas, generadores
+            new InventarioSeed(5, 8, 200));                                    // Techo: kits de higiene (sin nivel SALUD)
 
     // (ong, categoría, nivel); ong es el número de orden del seed local (1 a N). Sin fila la ONG no está
     // habilitada en la categoría. Se carga junto con las ONGs.
@@ -196,12 +200,20 @@ public class DatosIniciales implements CommandLineRunner {
         }
     }
 
-    // Solo se carga junto con las ONGs: si ya existían, su inventario ya fue editado
-    private void cargarInventario(Map<Integer, Recurso> recursos, Map<Integer, Ong> ongs) {
+    // Solo si la tabla está vacía (base nueva, o reiniciada con SEED_VERSION): si ya tiene filas, su
+    // inventario ya fue editado y no se pisa
+    private void cargarInventario(Map<Integer, Recurso> recursos, Map<Integer, Ong> recienCreadas) {
+        if (inventarioOngRepository.count() > 0) {
+            return;
+        }
+        Map<Integer, Ong> ongs = ongsPorOrden(recienCreadas);
         if (ongs.isEmpty() || recursos.size() != RECURSOS.size()) {
             return;
         }
         for (InventarioSeed seed : INVENTARIO) {
+            if (ongs.get(seed.ong()) == null) {
+                continue;
+            }
             InventarioOng inventario = new InventarioOng();
             inventario.setOng(ongs.get(seed.ong()));
             inventario.setRecurso(recursos.get(seed.recurso()));
@@ -217,17 +229,7 @@ public class DatosIniciales implements CommandLineRunner {
         if (nivelRepository.count() > 0) {
             return;
         }
-        Map<Integer, Ong> ongs = recienCreadas;
-        if (ongs.isEmpty()) {
-            ongs = new HashMap<>();
-            for (Ong ong : ongRepository.findAll()) {
-                for (int i = 0; i < ONGS.size(); i++) {
-                    if (ONGS.get(i).bonitaGroupPath().equals(ong.getBonitaGroupPath())) {
-                        ongs.put(i + 1, ong);
-                    }
-                }
-            }
-        }
+        Map<Integer, Ong> ongs = ongsPorOrden(recienCreadas);
         int cargados = 0;
         for (NivelSeed seed : NIVELES) {
             Ong ong = ongs.get(seed.ong());
@@ -242,6 +244,22 @@ public class DatosIniciales implements CommandLineRunner {
             cargados++;
         }
         log.info("Seed: {} niveles de competencia creados", cargados);
+    }
+
+    // Las ONGs recién creadas, o si ya existían las del seed ubicadas por el path de su grupo de Bonita
+    private Map<Integer, Ong> ongsPorOrden(Map<Integer, Ong> recienCreadas) {
+        if (!recienCreadas.isEmpty()) {
+            return recienCreadas;
+        }
+        Map<Integer, Ong> ongs = new HashMap<>();
+        for (Ong ong : ongRepository.findAll()) {
+            for (int i = 0; i < ONGS.size(); i++) {
+                if (ONGS.get(i).bonitaGroupPath().equals(ong.getBonitaGroupPath())) {
+                    ongs.put(i + 1, ong);
+                }
+            }
+        }
+        return ongs;
     }
 
     private void crearCuentasOng(Map<Integer, Ong> ongs) {

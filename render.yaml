@@ -52,6 +52,10 @@ services:
         sync: false
       - key: CUENTAS_ONG_PASSWORD
         sync: false
+      # Recarga del estado de la demo: al cambiar el valor (demo-1, demo-2...) se borran reservas, ofertas,
+      # inventarios y niveles y se vuelve a cargar el seed. Se carga a mano en el panel de Render.
+      - key: SEED_VERSION
+        sync: false
 
 databases:
   - name: sistema-nacional-db
